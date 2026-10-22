@@ -176,12 +176,26 @@ function formatTime(seconds) {
 }
 
 // Socket Events
+// Fetch dynamic system info on load to ensure QR code matches the exact domain
+fetch('/api/info')
+  .then(res => res.json())
+  .then(info => {
+    if (info.qrCode) {
+      idleQrImage.src = info.qrCode;
+      cornerQrImg.src = info.qrCode;
+    }
+    if (info.remoteUrl) {
+      idleQrUrl.textContent = info.remoteUrl;
+    }
+  })
+  .catch(err => console.log(err));
+
 socket.on('state:sync', (data) => {
-  if (data.qrCode) {
+  if (data.qrCode && !idleQrImage.src) {
     idleQrImage.src = data.qrCode;
     cornerQrImg.src = data.qrCode;
   }
-  if (data.remoteUrl) {
+  if (data.remoteUrl && idleQrUrl.textContent === 'สแกนเพื่อสั่งเพลง') {
     idleQrUrl.textContent = data.remoteUrl;
   }
 

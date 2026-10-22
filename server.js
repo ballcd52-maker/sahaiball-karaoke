@@ -65,17 +65,26 @@ qrcode.toDataURL(REMOTE_URL, { margin: 1, width: 250 }, (err, url) => {
   if (!err) qrCodeDataURL = url;
 });
 
-// API: System Information
-app.get('/api/info', (req, res) => {
-  res.json({
-    localIp: LOCAL_IP,
-    port: PORT,
-    remoteUrl: REMOTE_URL,
-    qrCode: qrCodeDataURL,
-    currentSong,
-    songQueue,
-    playerState
-  });
+// API: System Information (Dynamically adapts to local IP or Cloud URL)
+app.get('/api/info', async (req, res) => {
+  try {
+    const host = req.get('host') || `${LOCAL_IP}:${PORT}`;
+    const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+    const dynamicRemoteUrl = `${protocol}://${host}/remote`;
+    const dynamicQr = await qrcode.toDataURL(dynamicRemoteUrl, { margin: 1, width: 250 });
+
+    res.json({
+      localIp: LOCAL_IP,
+      port: PORT,
+      remoteUrl: dynamicRemoteUrl,
+      qrCode: dynamicQr,
+      currentSong,
+      songQueue,
+      playerState
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to generate info' });
+  }
 });
 
 // API: YouTube Search
