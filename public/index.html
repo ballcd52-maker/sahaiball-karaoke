@@ -140,13 +140,10 @@
   </div>
 
   <script>
-    fetch('/api/info')
-      .then(res => res.json())
-      .then(data => {
-        document.getElementById('qrImg').src = data.qrCode;
-        document.getElementById('qrUrlText').textContent = data.remoteUrl;
-      })
-      .catch(err => console.log(err));
+    const origin = window.location.origin;
+    const remoteUrl = `${origin}/remote`;
+    document.getElementById('qrImg').src = `/api/qr?url=${encodeURIComponent(remoteUrl)}`;
+    document.getElementById('qrUrlText').textContent = remoteUrl;
   </script>
 </body>
 </html>

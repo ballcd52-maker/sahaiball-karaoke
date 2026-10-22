@@ -8,6 +8,7 @@ const path = require('path');
 const cors = require('cors');
 
 const app = express();
+app.set('trust proxy', 1);
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: { origin: '*' }
@@ -65,12 +66,34 @@ qrcode.toDataURL(REMOTE_URL, { margin: 1, width: 250 }, (err, url) => {
   if (!err) qrCodeDataURL = url;
 });
 
+function getBaseUrl(req) {
+  if (process.env.RENDER_EXTERNAL_URL) {
+    return process.env.RENDER_EXTERNAL_URL.replace(/\/$/, '');
+  }
+  if (req) {
+    const host = req.get('host');
+    const proto = req.headers['x-forwarded-proto'] || req.protocol;
+    return `${proto}://${host}`;
+  }
+  return `http://${LOCAL_IP}:${PORT}`;
+}
+
+// API: Direct QR Code Generator Image
+app.get('/api/qr', async (req, res) => {
+  try {
+    const targetUrl = req.query.url || `${getBaseUrl(req)}/remote`;
+    const qrBuffer = await qrcode.toBuffer(targetUrl, { margin: 1, width: 260 });
+    res.type('png').send(qrBuffer);
+  } catch (err) {
+    res.status(500).send('QR Error');
+  }
+});
+
 // API: System Information (Dynamically adapts to local IP or Cloud URL)
 app.get('/api/info', async (req, res) => {
   try {
-    const host = req.get('host') || `${LOCAL_IP}:${PORT}`;
-    const protocol = req.headers['x-forwarded-proto'] || req.protocol;
-    const dynamicRemoteUrl = `${protocol}://${host}/remote`;
+    const baseUrl = getBaseUrl(req);
+    const dynamicRemoteUrl = `${baseUrl}/remote`;
     const dynamicQr = await qrcode.toDataURL(dynamicRemoteUrl, { margin: 1, width: 250 });
 
     res.json({

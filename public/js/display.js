@@ -175,30 +175,15 @@ function formatTime(seconds) {
   return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
 }
 
+// Setup QR code and URL directly from current page origin
+const currentOrigin = window.location.origin;
+const currentRemoteUrl = `${currentOrigin}/remote`;
+idleQrImage.src = `/api/qr?url=${encodeURIComponent(currentRemoteUrl)}`;
+cornerQrImg.src = `/api/qr?url=${encodeURIComponent(currentRemoteUrl)}`;
+idleQrUrl.textContent = currentRemoteUrl;
+
 // Socket Events
-// Fetch dynamic system info on load to ensure QR code matches the exact domain
-fetch('/api/info')
-  .then(res => res.json())
-  .then(info => {
-    if (info.qrCode) {
-      idleQrImage.src = info.qrCode;
-      cornerQrImg.src = info.qrCode;
-    }
-    if (info.remoteUrl) {
-      idleQrUrl.textContent = info.remoteUrl;
-    }
-  })
-  .catch(err => console.log(err));
-
 socket.on('state:sync', (data) => {
-  if (data.qrCode && !idleQrImage.src) {
-    idleQrImage.src = data.qrCode;
-    cornerQrImg.src = data.qrCode;
-  }
-  if (data.remoteUrl && idleQrUrl.textContent === 'สแกนเพื่อสั่งเพลง') {
-    idleQrUrl.textContent = data.remoteUrl;
-  }
-
   currentActiveSong = data.currentSong;
   updateQueueDisplay(data.songQueue, data.currentSong);
 
