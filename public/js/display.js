@@ -60,6 +60,13 @@ const idleQrUrl = document.getElementById('idleQrUrl');
 const cornerQr = document.getElementById('cornerQr');
 const cornerQrImg = document.getElementById('cornerQrImg');
 
+const audioUnlockModal = document.getElementById('audioUnlockModal');
+const unlockAudioBtn = document.getElementById('unlockAudioBtn');
+const nextSingerAlert = document.getElementById('nextSingerAlert');
+const alertNextSongTitle = document.getElementById('alertNextSongTitle');
+const alertNextSinger = document.getElementById('alertNextSinger');
+const boostBadge = document.getElementById('boostBadge');
+
 const topOverlay = document.getElementById('topOverlay');
 const nowPlayingTitle = document.getElementById('nowPlayingTitle');
 const requesterBadge = document.getElementById('requesterBadge');
@@ -144,6 +151,25 @@ function onPlayerError(e) {
   }, 2000);
 }
 
+let currentQueue = [];
+let hasTriggeredNextAlert = false;
+let nextAlertTimer = null;
+
+function showNextSingerAlert(nextSong) {
+  if (!nextSingerAlert || !nextSong) return;
+  alertNextSongTitle.textContent = nextSong.title;
+  alertNextSinger.textContent = `👤 ร้องโดย: ${nextSong.requester || 'เพื่อนร่วมห้อง'}`;
+  nextSingerAlert.classList.add('active');
+  playKtvSFX('whistle');
+  if (nextAlertTimer) clearTimeout(nextAlertTimer);
+  nextAlertTimer = setTimeout(hideNextSingerAlert, 12000);
+}
+
+function hideNextSingerAlert() {
+  if (nextSingerAlert) nextSingerAlert.classList.remove('active');
+  if (nextAlertTimer) clearTimeout(nextAlertTimer);
+}
+
 function startProgressTracker() {
   if (progressTimer) clearInterval(progressTimer);
   progressTimer = setInterval(() => {
@@ -155,6 +181,13 @@ function startProgressTracker() {
       progressBar.style.width = `${pct}%`;
       timeCurrent.textContent = formatTime(cur);
       timeDuration.textContent = formatTime(dur);
+
+      // Trigger Next Singer Alert when 25s remain
+      const remaining = dur - cur;
+      if (remaining <= 25 && remaining > 5 && !hasTriggeredNextAlert && currentQueue && currentQueue.length > 0) {
+        hasTriggeredNextAlert = true;
+        showNextSingerAlert(currentQueue[0]);
+      }
 
       socket.emit('tv:state_update', {
         isPlaying: true,
@@ -193,6 +226,9 @@ socket.on('state:sync', (data) => {
     }
     updateSpeedBadge(data.playerState.speed || 1.0);
     updateKeyBadge(data.playerState.keyShift || 0);
+    if (data.playerState.isBoosted !== undefined) {
+      updateBoostBadge(data.playerState.isBoosted);
+    }
   }
 
   if (data.currentSong && isPlayerReady) {
@@ -236,6 +272,9 @@ socket.on('tv:command', (cmd) => {
     case 'sfx_volume':
       sfxVolume = cmd.value / 100;
       break;
+    case 'boost':
+      updateBoostBadge(cmd.value);
+      break;
     case 'speed':
       if (player.setPlaybackRate) {
         player.setPlaybackRate(cmd.value);
@@ -264,6 +303,8 @@ socket.on('tv:command', (cmd) => {
 
 function loadVideo(videoId) {
   currentVideoId = videoId;
+  hasTriggeredNextAlert = false;
+  hideNextSingerAlert();
   idleScreen.classList.remove('active');
   cornerQr.style.display = 'flex';
   topOverlay.style.display = 'flex';
@@ -279,6 +320,8 @@ function loadVideo(videoId) {
 
 function showIdleScreen() {
   currentVideoId = null;
+  hasTriggeredNextAlert = false;
+  hideNextSingerAlert();
   idleScreen.classList.add('active');
   cornerQr.style.display = 'none';
   topOverlay.style.display = 'none';
@@ -295,6 +338,13 @@ function showIdleScreen() {
 }
 
 function updateQueueDisplay(songQueue, currentSong) {
+  currentQueue = songQueue || [];
+  if (currentSong) {
+    nowPlayingTitle.textContent = currentSong.title;
+    requesterBadge.innerHTML = `<span>👤 ขอโดย: ${currentSong.requester || 'มือถือ'}</span>`;
+  } else {
+    nowPlayingTitle.textContent = 'กำลังรอเพลง...';
+  }
   if (currentSong) {
     nowPlayingTitle.textContent = currentSong.title;
     requesterBadge.innerHTML = `<span>👤 ขอโดย: ${currentSong.requester || 'มือถือ'}</span>`;
@@ -689,3 +739,89 @@ fullscreenBtn.addEventListener('click', () => {
     if (document.exitFullscreen) document.exitFullscreen();
   }
 });
+
+// Audio Boost Badge
+function updateBoostBadge(isBoosted) {
+  if (boostBadge) {
+    boostBadge.style.display = isBoosted ? 'inline-block' : 'none';
+  }
+  if (player && player.setVolume) {
+    player.setVolume(isBoosted ? 100 : 80);
+  }
+}
+
+// Audio Unlock Splash Modal Handler
+if (unlockAudioBtn && audioUnlockModal) {
+  unlockAudioBtn.addEventListener('click', () => {
+    audioUnlockModal.classList.remove('active');
+    const ctx = getAudioContext();
+    if (ctx && ctx.state === 'suspended') ctx.resume();
+    preloadSFX();
+    if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+      document.documentElement.requestFullscreen().catch(() => {});
+    }
+  });
+}
+
+// Cyber Clock
+function initCyberClock() {
+  const clockEl = document.getElementById('cyberClock');
+  if (!clockEl) return;
+  function update() {
+    const d = new Date();
+    clockEl.textContent = d.toTimeString().split(' ')[0];
+  }
+  update();
+  setInterval(update, 1000);
+}
+initCyberClock();
+
+// Futuristic Idle Wave Canvas
+function initIdleCanvas() {
+  const canvas = document.getElementById('idleVisualizerCanvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  let animationFrameId;
+  let phase = 0;
+
+  function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  function draw() {
+    if (!idleScreen || !idleScreen.classList.contains('active')) {
+      animationFrameId = requestAnimationFrame(draw);
+      return;
+    }
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    phase += 0.02;
+
+    const centerY = canvas.height * 0.72;
+    const waves = [
+      { color: 'rgba(0, 240, 255, 0.28)', freq: 0.003, amp: 45, speed: 1.0 },
+      { color: 'rgba(168, 85, 247, 0.25)', freq: 0.004, amp: 35, speed: 0.7 },
+      { color: 'rgba(244, 63, 94, 0.20)', freq: 0.002, amp: 55, speed: -0.5 }
+    ];
+
+    waves.forEach(w => {
+      ctx.beginPath();
+      ctx.strokeStyle = w.color;
+      ctx.lineWidth = 3;
+      ctx.shadowBlur = 18;
+      ctx.shadowColor = w.color;
+      for (let x = 0; x < canvas.width; x += 6) {
+        const y = centerY + Math.sin(x * w.freq + phase * w.speed) * w.amp + Math.cos((x * 0.002) + phase) * 15;
+        if (x === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    });
+
+    animationFrameId = requestAnimationFrame(draw);
+  }
+  draw();
+}
+initIdleCanvas();

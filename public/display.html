@@ -20,20 +20,49 @@
     <!-- Video Overlay Mask (prevents accidental clicks / keeps KTV clean) -->
     <div class="player-mask"></div>
 
+    <!-- Audio Unlock & Fullscreen Splash (First Interaction Gate) -->
+    <div id="audioUnlockModal" class="audio-unlock-modal active">
+      <div class="unlock-card">
+        <div class="unlock-halo"></div>
+        <div class="unlock-icon">🎤</div>
+        <div class="unlock-tag">NEXT-GEN KTV ENTERTAINMENT</div>
+        <h2>SahaiBall KARAOKE</h2>
+        <p>แตะหน้าจอหรือกดปุ่มเพื่อเริ่มต้นระบบคาราโอเกะเต็มจอ และเปิดใช้งานระบบเสียงสตูดิโอ</p>
+        <button id="unlockAudioBtn" class="unlock-btn">
+          <span class="btn-shine"></span>
+          <span class="btn-text">🚀 เข้าสู่ระบบคาราโอเกะ (START)</span>
+        </button>
+        <div class="unlock-hint">ระบบรองรับการกด F11 เพื่อสลับโหมดเต็มจอบนทีวีได้ตลอดเวลา</div>
+      </div>
+    </div>
+
     <!-- Idle / Standby Screen (Shown when queue is empty) -->
     <div id="idleScreen" class="idle-screen active">
+      <!-- Animated Futuristic Canvas Wave Background -->
+      <canvas id="idleVisualizerCanvas" class="idle-canvas"></canvas>
       <div class="idle-ambient-glow"></div>
       
       <div class="idle-content">
-        <div class="brand-badge">
-          <span class="icon">🎤</span>
-          <span>SahaiBall Karaoke</span>
+        <!-- Cyber HUD Header with Real-time Clock -->
+        <div class="cyber-hud-top">
+          <div class="brand-badge">
+            <span class="icon">🎤</span>
+            <span>SahaiBall Karaoke</span>
+          </div>
+          <div class="cyber-clock-box">
+            <span class="pulse-dot green"></span>
+            <span id="cyberClock">00:00:00</span>
+          </div>
         </div>
         
-        <h1 class="idle-title">พร้อมร้องเพลงแล้ว!</h1>
-        <p class="idle-subtitle">ใช้โทรศัพท์มือถือเปิดกล้องสแกน QR Code เพื่อค้นหาเพลงและส่งเข้าคิวได้ทันที</p>
+        <h1 class="idle-title">พร้อมเปิดเวทีร้องเพลงแล้ว!</h1>
+        <p class="idle-subtitle">ใช้โทรศัพท์มือถือเปิดกล้องสแกน QR Code ด้านล่าง เพื่อค้นหาเพลงและส่งเข้าคิวได้ทันที</p>
 
-        <div class="qr-box">
+        <div class="qr-box cyber-qr-box">
+          <div class="qr-corner-tl"></div>
+          <div class="qr-corner-tr"></div>
+          <div class="qr-corner-bl"></div>
+          <div class="qr-corner-br"></div>
           <img id="idleQrImage" src="" alt="Scan QR Code to Order Songs">
           <div class="qr-label">
             <span class="pulse-dot"></span>
@@ -42,11 +71,22 @@
         </div>
 
         <div class="idle-tips">
-          <div class="tip-pill">📱 ไม่ต้องลงแอป</div>
-          <div class="tip-pill">🔍 ค้นหาเพลงจาก YouTube ได้ทุกเพลง</div>
-          <div class="tip-pill">🎙️ ตัดเสียงร้อง/สลับเวอร์ชันได้</div>
-          <div class="tip-pill">🚀 จัดคิวร่วมกันได้หลายเครื่อง</div>
+          <div class="tip-pill">📱 ไม่ต้องลงแอป สแกนแล้วใช้ได้ทันที</div>
+          <div class="tip-pill">🔍 ค้นหาเพลงจาก YouTube ได้ทุกแนว</div>
+          <div class="tip-pill">🎙️ ตัดเสียงร้อง / ปรับคีย์ / ปรับความเร็ว</div>
+          <div class="tip-pill">🎉 ซาวด์เอฟเฟกต์ & ส่งข้อความเชียร์ขึ้นจอ</div>
         </div>
+      </div>
+    </div>
+
+    <!-- Next Singer Alert Banner (Fires 25s before song ends) -->
+    <div id="nextSingerAlert" class="next-singer-alert">
+      <div class="alert-border-glow"></div>
+      <div class="alert-icon-box">⚡</div>
+      <div class="alert-body">
+        <div class="alert-badge">🎤 คิวถัดไปเตรียมไมค์!</div>
+        <div id="alertNextSongTitle" class="alert-title">ชื่อเพลง...</div>
+        <div id="alertNextSinger" class="alert-singer">👤 ร้องโดย: คุณ...</div>
       </div>
     </div>
 
@@ -65,6 +105,9 @@
         </div>
         <div id="vocalModeBadge" class="vocal-badge">
           <span>🔊 สเตอริโอปกติ</span>
+        </div>
+        <div id="boostBadge" class="param-badge boost-badge" style="display:none;">
+          <span>🔥 AUDIO BOOST +20%</span>
         </div>
         <div id="keyBadge" class="param-badge" style="display:none;">
           <span>🎼 คีย์: 0</span>

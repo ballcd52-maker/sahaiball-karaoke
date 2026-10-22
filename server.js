@@ -44,7 +44,8 @@ let playerState = {
   sfxVolume: 100,
   speed: 1.0,
   keyShift: 0,
-  isVocalCut: false
+  isVocalCut: false,
+  isBoosted: false
 };
 
 app.use(cors());
@@ -250,6 +251,10 @@ io.on('connection', (socket) => {
     } else if (action === 'key') {
       playerState.keyShift = Number(value);
       io.emit('tv:command', { action: 'key', value: playerState.keyShift });
+      io.emit('player:state', playerState);
+    } else if (action === 'boost') {
+      playerState.isBoosted = Boolean(value);
+      io.emit('tv:command', { action: 'boost', value: playerState.isBoosted });
       io.emit('player:state', playerState);
     } else if (action === 'seek') {
       io.emit('tv:command', { action: 'seek', value });

@@ -651,3 +651,269 @@ body, html {
   color: #cbd5e1;
 }
 
+/* ========================================================
+   FUTURISTIC & CYBER HUD ENHANCEMENTS
+   ======================================================== */
+
+/* Audio Unlock Modal (Start Screen Gate) */
+.audio-unlock-modal {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 100;
+  background: radial-gradient(circle at center, rgba(16, 12, 36, 0.94) 0%, rgba(5, 4, 12, 0.98) 100%);
+  backdrop-filter: blur(25px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.audio-unlock-modal.active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.unlock-card {
+  position: relative;
+  background: rgba(22, 17, 44, 0.85);
+  border: 1px solid rgba(0, 240, 255, 0.3);
+  box-shadow: 0 0 50px rgba(0, 240, 255, 0.2), 0 20px 40px rgba(0, 0, 0, 0.6);
+  border-radius: 28px;
+  padding: 45px 50px;
+  max-width: 580px;
+  text-align: center;
+  overflow: hidden;
+}
+
+.unlock-halo {
+  position: absolute;
+  top: -50px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 250px;
+  height: 150px;
+  background: radial-gradient(ellipse at center, rgba(168, 85, 247, 0.45) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.unlock-icon {
+  font-size: 3.5rem;
+  margin-bottom: 12px;
+  filter: drop-shadow(0 0 20px #00f0ff);
+}
+
+.unlock-tag {
+  display: inline-block;
+  font-size: 0.85rem;
+  letter-spacing: 3px;
+  color: #00f0ff;
+  font-weight: 700;
+  margin-bottom: 10px;
+  text-shadow: 0 0 10px rgba(0, 240, 255, 0.7);
+}
+
+.unlock-card h2 {
+  font-size: 2.4rem;
+  font-weight: 800;
+  background: linear-gradient(135deg, #ffffff 30%, #00f0ff 70%, #d946ef 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  margin-bottom: 15px;
+}
+
+.unlock-card p {
+  font-size: 1.15rem;
+  color: #cbd5e1;
+  line-height: 1.6;
+  margin-bottom: 30px;
+}
+
+.unlock-btn {
+  position: relative;
+  background: linear-gradient(135deg, #00f0ff 0%, #7000ff 50%, #ff007f 100%);
+  border: none;
+  color: #ffffff;
+  padding: 16px 36px;
+  font-size: 1.2rem;
+  font-weight: 700;
+  border-radius: 16px;
+  cursor: pointer;
+  box-shadow: 0 10px 30px rgba(112, 0, 255, 0.5), 0 0 20px rgba(0, 240, 255, 0.4);
+  overflow: hidden;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.unlock-btn:hover {
+  transform: scale(1.04);
+  box-shadow: 0 15px 40px rgba(112, 0, 255, 0.7), 0 0 30px rgba(0, 240, 255, 0.6);
+}
+
+.unlock-hint {
+  margin-top: 20px;
+  font-size: 0.9rem;
+  color: #94a3b8;
+}
+
+/* Idle Screen Animated Canvas */
+.idle-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0.75;
+}
+
+.cyber-hud-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  max-width: 600px;
+  margin-bottom: 16px;
+}
+
+.cyber-clock-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(0, 240, 255, 0.08);
+  border: 1px solid rgba(0, 240, 255, 0.35);
+  border-radius: 30px;
+  padding: 6px 16px;
+  font-family: monospace;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #00f0ff;
+  text-shadow: 0 0 10px rgba(0, 240, 255, 0.5);
+  box-shadow: 0 0 15px rgba(0, 240, 255, 0.15);
+}
+
+.pulse-dot.green {
+  background-color: #10b981;
+  box-shadow: 0 0 8px #10b981;
+}
+
+/* Cyber QR Box Frame */
+.cyber-qr-box {
+  position: relative;
+  background: rgba(15, 12, 32, 0.85);
+  border: 1px solid rgba(168, 85, 247, 0.4);
+  box-shadow: 0 0 35px rgba(168, 85, 247, 0.25), 0 10px 30px rgba(0, 0, 0, 0.6);
+  padding: 24px;
+  border-radius: 24px;
+}
+
+.qr-corner-tl, .qr-corner-tr, .qr-corner-bl, .qr-corner-br {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  border-color: #00f0ff;
+  border-style: solid;
+  pointer-events: none;
+}
+
+.qr-corner-tl { top: 8px; left: 8px; border-width: 3px 0 0 3px; }
+.qr-corner-tr { top: 8px; right: 8px; border-width: 3px 3px 0 0; }
+.qr-corner-bl { bottom: 8px; left: 8px; border-width: 0 0 3px 3px; }
+.qr-corner-br { bottom: 8px; right: 8px; border-width: 0 3px 3px 0; }
+
+/* Next Singer Alert Banner (Fires 25s before end) */
+.next-singer-alert {
+  position: absolute;
+  top: 100px;
+  right: -500px;
+  z-index: 30;
+  background: rgba(20, 16, 40, 0.92);
+  border: 2px solid #f59e0b;
+  border-radius: 20px;
+  padding: 16px 24px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  max-width: 460px;
+  box-shadow: 0 0 35px rgba(245, 158, 11, 0.4), 0 10px 30px rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(20px);
+  transition: right 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.4s ease;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.next-singer-alert.active {
+  right: 35px;
+  opacity: 1;
+}
+
+.alert-icon-box {
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #f59e0b, #ef4444);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.8rem;
+  color: #fff;
+  box-shadow: 0 0 20px rgba(245, 158, 11, 0.6);
+  flex-shrink: 0;
+  animation: pulseIcon 1.5s infinite;
+}
+
+@keyframes pulseIcon {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.12); }
+}
+
+.alert-body {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.alert-badge {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #fbbf24;
+  letter-spacing: 1px;
+  margin-bottom: 2px;
+  text-shadow: 0 0 10px rgba(251, 191, 36, 0.6);
+}
+
+.alert-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #ffffff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 2px;
+}
+
+.alert-singer {
+  font-size: 0.95rem;
+  color: #38bdf8;
+  font-weight: 500;
+}
+
+/* Audio Boost Badge */
+.boost-badge {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.3), rgba(245, 158, 11, 0.3));
+  border: 1px solid #f59e0b;
+  color: #fde047;
+  font-weight: 700;
+  box-shadow: 0 0 15px rgba(245, 158, 11, 0.4);
+  animation: pulseBoost 2s infinite ease-in-out;
+}
+
+@keyframes pulseBoost {
+  0%, 100% { opacity: 0.85; }
+  50% { opacity: 1; transform: scale(1.05); }
+}
+

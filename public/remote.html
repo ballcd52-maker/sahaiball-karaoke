@@ -22,9 +22,15 @@
         </div>
       </div>
       
-      <div class="user-badge" id="userBadgeBtn">
-        <span class="user-avatar">👤</span>
-        <span id="userNameDisplay">ฉันเอง</span>
+      <div class="header-actions">
+        <button id="shareRemoteBtn" class="cyber-share-btn" title="ส่งลิงก์เข้า LINE ให้เพื่อน">
+          <span class="icon">🔗</span>
+          <span>ส่ง LINE</span>
+        </button>
+        <div class="user-badge" id="userBadgeBtn">
+          <span class="user-avatar">👤</span>
+          <span id="userNameDisplay">ฉันเอง</span>
+        </div>
       </div>
     </header>
 
@@ -52,6 +58,17 @@
       <!-- TAB 1: SEARCH (DEFAULT) -->
       <section id="tabSearch" class="tab-view active">
         <div class="search-box">
+          <!-- Lucky Draw Button -->
+          <div class="lucky-draw-wrapper">
+            <button type="button" id="luckyDrawBtn" class="lucky-draw-btn">
+              <span class="dice-icon">🎲</span>
+              <div class="lucky-label-box">
+                <span class="lucky-title">สุ่มเพลงโดนใจ (Lucky Draw)</span>
+                <span class="lucky-sub">คิดไม่ออกแตะตรงนี้ สุ่มเพลงฮิตทันที! ✨</span>
+              </div>
+            </button>
+          </div>
+
           <div class="search-input-wrapper">
             <span class="search-icon">🔍</span>
             <input type="text" id="searchInput" placeholder="พิมพ์ชื่อเพลง หรือ ศิลปิน..." autocomplete="off">
@@ -68,6 +85,18 @@
               <span class="mode-icon">🎬</span>
               <span>MV ต้นฉบับ (มีเสียงร้อง)</span>
             </button>
+          </div>
+
+          <!-- Genre Category Bar -->
+          <div class="genre-category-bar" id="genreCategoryBar">
+            <button class="genre-pill active" data-genre="all">🎯 ทั้งหมด</button>
+            <button class="genre-pill" data-genre="fav">❤️ เพลงโปรด (<span id="favCountBadge">0</span>)</button>
+            <button class="genre-pill" data-genre="rock">🎸 ร็อคมันส์</button>
+            <button class="genre-pill" data-genre="sad">💔 เพลงอกหัก</button>
+            <button class="genre-pill" data-genre="90s">📼 ยุค 90s-2000s</button>
+            <button class="genre-pill" data-genre="country">🌾 ลูกทุ่งฮิต</button>
+            <button class="genre-pill" data-genre="inter">🌍 สากล Hits</button>
+            <button class="genre-pill" data-genre="dance">💃 ปาร์ตี้แดนซ์</button>
           </div>
 
           <!-- Quick Chips -->
@@ -151,6 +180,21 @@
               <span id="sfxVolumeVal">100%</span>
             </div>
             <input type="range" id="sfxVolumeSlider" min="0" max="100" value="100" class="custom-slider">
+          </div>
+
+          <!-- Volume Boost (Normalization & Amplification) -->
+          <div class="boost-card">
+            <div class="boost-content">
+              <span class="boost-icon">⚡</span>
+              <div class="boost-texts">
+                <strong>Audio Boost (+20%)</strong>
+                <p>เร่งเสียงให้ดังสะใจ สำหรับคลิปเพลงที่เสียงบันทึกมาเบา</p>
+              </div>
+            </div>
+            <label class="cyber-switch">
+              <input type="checkbox" id="boostToggle">
+              <span class="cyber-slider"></span>
+            </label>
           </div>
 
           <!-- Key Control (Pitch Shifter) -->
