@@ -233,6 +233,49 @@ body, html {
   padding: 0 4px;
 }
 
+.search-mode-segmented {
+  display: flex;
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 4px;
+  gap: 6px;
+  margin: 10px 0 14px 0;
+}
+
+.mode-btn {
+  flex: 1;
+  padding: 9px 10px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: #94a3b8;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mode-btn .mode-icon {
+  font-size: 1.1rem;
+}
+
+.mode-btn.active {
+  background: linear-gradient(135deg, #a855f7 0%, #ec4899 100%);
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(168, 85, 247, 0.35);
+}
+
+.mode-btn.active.mv-mode {
+  background: linear-gradient(135deg, #2563eb 0%, #06b6d4 100%);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35);
+}
+
 .search-filters {
   margin: 10px 0 14px 0;
 }

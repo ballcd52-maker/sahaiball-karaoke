@@ -35,11 +35,13 @@ const miniProgressBar = document.getElementById('miniProgressBar');
 // Search Tab
 const searchInput = document.getElementById('searchInput');
 const searchClearBtn = document.getElementById('searchClearBtn');
-const filterKaraoke = document.getElementById('filterKaraoke');
+const modeKaraokeBtn = document.getElementById('modeKaraokeBtn');
+const modeMvBtn = document.getElementById('modeMvBtn');
+const quickChipsContainer = document.getElementById('quickChipsContainer');
 const searchLoading = document.getElementById('searchLoading');
 const searchEmpty = document.getElementById('searchEmpty');
 const resultsList = document.getElementById('resultsList');
-const chips = document.querySelectorAll('.chip');
+let searchMode = 'karaoke'; // 'karaoke' | 'mv'
 
 // Queue Tab
 const queueList = document.getElementById('queueList');
@@ -343,18 +345,60 @@ searchClearBtn.addEventListener('click', () => {
   searchInput.focus();
 });
 
-filterKaraoke.addEventListener('change', () => {
+const karaokeChips = [
+  { label: '🔥 คาราโอเกะฮิต', query: 'คาราโอเกะ ฮิต' },
+  { label: 'COCKTAIL', query: 'COCKTAIL คาราโอเกะ' },
+  { label: 'Tilly Birds', query: 'Tilly Birds คาราโอเกะ' },
+  { label: 'Bodyslam', query: 'Bodyslam คาราโอเกะ' },
+  { label: 'Three Man Down', query: 'Three Man Down คาราโอเกะ' },
+  { label: 'ลูกทุ่งฮิต', query: 'ลูกทุ่ง คาราโอเกะ' }
+];
+
+const mvChips = [
+  { label: '🔥 เพลงฮิตติดชาร์ต', query: 'เพลงไทยฮิตติดชาร์ต' },
+  { label: '🎬 Official MV', query: 'Official MV เพลงฮิต' },
+  { label: 'COCKTAIL MV', query: 'COCKTAIL Official MV' },
+  { label: 'Tilly Birds MV', query: 'Tilly Birds Official MV' },
+  { label: 'Bodyslam MV', query: 'Bodyslam Official MV' },
+  { label: 'เพลงสากลฮิต', query: 'Top Billboard Hits' }
+];
+
+function renderQuickChips(mode) {
+  if (!quickChipsContainer) return;
+  const list = mode === 'mv' ? mvChips : karaokeChips;
+  quickChipsContainer.innerHTML = list.map(item => `
+    <button class="chip" data-query="${escapeHtml(item.query)}">${escapeHtml(item.label)}</button>
+  `).join('');
+
+  quickChipsContainer.querySelectorAll('.chip').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const q = btn.dataset.query;
+      searchInput.value = q;
+      executeSearch(q);
+    });
+  });
+}
+
+function setSearchMode(mode) {
+  searchMode = mode;
+  if (mode === 'karaoke') {
+    if (modeKaraokeBtn) modeKaraokeBtn.classList.add('active');
+    if (modeMvBtn) modeMvBtn.classList.remove('active', 'mv-mode');
+    searchInput.placeholder = 'พิมพ์ชื่อเพลง หรือ ศิลปิน (ตัดเสียงร้อง)...';
+    renderQuickChips('karaoke');
+  } else {
+    if (modeMvBtn) modeMvBtn.classList.add('active', 'mv-mode');
+    if (modeKaraokeBtn) modeKaraokeBtn.classList.remove('active');
+    searchInput.placeholder = 'พิมพ์ชื่อเพลง MV ต้นฉบับ (มีเสียงร้อง)...';
+    renderQuickChips('mv');
+  }
   const q = searchInput.value.trim();
   if (q) executeSearch(q);
-});
+}
 
-chips.forEach(chip => {
-  chip.addEventListener('click', () => {
-    const query = chip.dataset.query;
-    searchInput.value = query;
-    executeSearch(query);
-  });
-});
+if (modeKaraokeBtn) modeKaraokeBtn.addEventListener('click', () => setSearchMode('karaoke'));
+if (modeMvBtn) modeMvBtn.addEventListener('click', () => setSearchMode('mv'));
+renderQuickChips('karaoke');
 
 async function executeSearch(query) {
   if (!query) return;
@@ -363,7 +407,7 @@ async function executeSearch(query) {
   searchEmpty.style.display = 'none';
   resultsList.innerHTML = '';
 
-  const isKaraoke = filterKaraoke.checked;
+  const isKaraoke = searchMode === 'karaoke';
 
   try {
     const res = await fetch(`/api/search?q=${encodeURIComponent(query)}&karaoke=${isKaraoke}`);
@@ -389,12 +433,18 @@ async function executeSearch(query) {
 
 function renderSearchResults(videos) {
   resultsList.innerHTML = '';
+  const isMv = searchMode === 'mv';
   videos.forEach(v => {
     const card = document.createElement('div');
     card.className = 'song-card';
+    const tagBadge = isMv 
+      ? '<span style="display:inline-block; font-size:0.75rem; background:rgba(37,99,235,0.25); color:#60a5fa; border:1px solid rgba(59,130,246,0.3); padding:2px 8px; border-radius:12px; margin-bottom:4px; font-weight:600;">🎬 MV มีเสียงร้อง</span>'
+      : '<span style="display:inline-block; font-size:0.75rem; background:rgba(168,85,247,0.25); color:#c084fc; border:1px solid rgba(168,85,247,0.3); padding:2px 8px; border-radius:12px; margin-bottom:4px; font-weight:600;">🎤 คาราโอเกะ</span>';
+
     card.innerHTML = `
       <img src="${v.thumbnail}" alt="Thumb" loading="lazy">
       <div class="song-card-info">
+        ${tagBadge}
         <div class="song-card-title">${escapeHtml(v.title)}</div>
         <div class="song-card-author">${escapeHtml(v.author)}</div>
         <div class="song-card-duration">⏱️ ${v.duration}</div>

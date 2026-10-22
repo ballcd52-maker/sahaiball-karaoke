@@ -413,12 +413,92 @@ function hideScoreScreen() {
   clearTimeout(scoreTimeout);
 }
 
-// Web Audio API KTV Synthesizer (Sound Effects / Jingles)
+// Real Audio SFX File Mapping & Web Audio Buffers
+const sfxAudioMap = {
+  applause: '/sfx/applause.mp3',
+  cheering: '/sfx/cheering.mp3',
+  horn: '/sfx/horn.mp3',
+  drumroll: '/sfx/drumroll.mp3',
+  rimshot: '/sfx/rimshot.mp3',
+  laugh: '/sfx/laugh.mp3',
+  fanfare: '/sfx/fanfare.mp3',
+  whistle: '/sfx/whistle.mp3'
+};
+const sfxBuffers = {};
+
+async function preloadSFX() {
+  try {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    for (const [name, url] of Object.entries(sfxAudioMap)) {
+      if (sfxBuffers[name]) continue;
+      try {
+        const resp = await fetch(url);
+        if (resp.ok) {
+          const ab = await resp.arrayBuffer();
+          sfxBuffers[name] = await ctx.decodeAudioData(ab);
+          console.log(`✅ Loaded SFX: ${name}`);
+        }
+      } catch (e) {
+        // Continue loading others
+      }
+    }
+  } catch (err) {
+    console.warn('Preload SFX error:', err);
+  }
+}
+
+// Preload on first click or touch on TV screen
+['click', 'touchstart', 'keydown'].forEach(evt => {
+  window.addEventListener(evt, () => preloadSFX(), { once: true });
+});
+
+// Socket listener for party sound effects
 socket.on('tv:sfx', (data) => {
   playKtvSFX(data.type);
 });
 
 function playKtvSFX(type) {
+  // 1. Try playing pre-decoded Web Audio buffer (0ms latency, polyphonic overlap)
+  try {
+    const ctx = getAudioContext();
+    if (ctx) {
+      if (ctx.state === 'suspended') ctx.resume();
+      if (sfxBuffers[type]) {
+        const source = ctx.createBufferSource();
+        source.buffer = sfxBuffers[type];
+        const gainNode = ctx.createGain();
+        gainNode.gain.setValueAtTime(sfxVolume, ctx.currentTime);
+        source.connect(gainNode);
+        gainNode.connect(ctx.destination);
+        source.start(0);
+        return;
+      }
+    }
+  } catch (err) {
+    console.warn('Web Audio buffer playback error:', err);
+  }
+
+  // 2. Fallback to HTML5 Audio element
+  if (sfxAudioMap[type]) {
+    try {
+      const audio = new Audio(sfxAudioMap[type]);
+      audio.volume = Math.max(0, Math.min(1, sfxVolume));
+      const p = audio.play();
+      if (p) {
+        p.catch(() => playSynthSFX(type));
+      }
+      return;
+    } catch (err) {
+      console.warn('HTML5 Audio playback error:', err);
+    }
+  }
+
+  // 3. Fallback to Procedural Synthesis
+  playSynthSFX(type);
+}
+
+function playSynthSFX(type) {
   try {
     const ctx = getAudioContext();
     const now = ctx.currentTime;
@@ -426,7 +506,7 @@ function playKtvSFX(type) {
     masterGain.gain.setValueAtTime(sfxVolume, now);
     masterGain.connect(ctx.destination);
 
-    if (type === 'applause') {
+    if (type === 'applause' || type === 'cheering') {
       // Pink Noise Crowd Clapping
       const bufferSize = ctx.sampleRate * 2.5;
       const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
@@ -487,7 +567,6 @@ function playKtvSFX(type) {
         osc.start(now + i * 0.06);
         osc.stop(now + i * 0.06 + 0.05);
       }
-      // Crash at end
       setTimeout(() => {
         playCymbalCrash(ctx, masterGain);
       }, 1200);
@@ -532,6 +611,19 @@ function playKtvSFX(type) {
         osc.start(now + idx * 0.12);
         osc.stop(now + idx * 0.12 + 0.16);
       });
+    } else if (type === 'whistle') {
+      // High pitch slide
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(1200, now);
+      osc.frequency.exponentialRampToValueAtTime(2400, now + 0.3);
+      gain.gain.setValueAtTime(0.4, now);
+      gain.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+      osc.connect(gain);
+      gain.connect(masterGain);
+      osc.start(now);
+      osc.stop(now + 0.4);
     }
   } catch (err) {
     console.warn('SFX Synth error:', err);

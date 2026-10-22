@@ -58,17 +58,21 @@
             <button id="searchClearBtn" class="clear-btn">&times;</button>
           </div>
           
-          <div class="search-filters">
-            <label class="filter-toggle">
-              <input type="checkbox" id="filterKaraoke" checked>
-              <span class="toggle-slider"></span>
-              <span class="toggle-label">🎯 เน้นเพลงคาราโอเกะ</span>
-            </label>
+          <!-- Search Mode Selector: Karaoke vs Original MV -->
+          <div class="search-mode-segmented">
+            <button type="button" class="mode-btn active" id="modeKaraokeBtn" data-mode="karaoke">
+              <span class="mode-icon">🎤</span>
+              <span>คาราโอเกะ (ตัดเสียงร้อง)</span>
+            </button>
+            <button type="button" class="mode-btn" id="modeMvBtn" data-mode="mv">
+              <span class="mode-icon">🎬</span>
+              <span>MV ต้นฉบับ (มีเสียงร้อง)</span>
+            </button>
           </div>
 
           <!-- Quick Chips -->
-          <div class="quick-chips">
-            <button class="chip" data-query="คาราโอเกะ ฮิต">🔥 เพลงฮิต</button>
+          <div class="quick-chips" id="quickChipsContainer">
+            <button class="chip" data-query="คาราโอเกะ ฮิต">🔥 คาราโอเกะฮิต</button>
             <button class="chip" data-query="COCKTAIL คาราโอเกะ">COCKTAIL</button>
             <button class="chip" data-query="Tilly Birds คาราโอเกะ">Tilly Birds</button>
             <button class="chip" data-query="Bodyslam คาราโอเกะ">Bodyslam</button>
@@ -219,7 +223,12 @@
             <button class="sfx-btn" data-sfx="applause">
               <span class="icon">👏</span>
               <strong>เสียงปรบมือ</strong>
-              <span>เสียงเฮเชียร์ลั่นห้อง</span>
+              <span>ปรบมือเกรียวกราว สตูดิโอ</span>
+            </button>
+            <button class="sfx-btn" data-sfx="cheering">
+              <span class="icon">🥳</span>
+              <strong>เฮเชียร์!</strong>
+              <span>เสียงเฮลั่นห้อง ปาร์ตี้</span>
             </button>
             <button class="sfx-btn" data-sfx="horn">
               <span class="icon">🎺</span>
@@ -239,12 +248,17 @@
             <button class="sfx-btn" data-sfx="laugh">
               <span class="icon">😂</span>
               <strong>เสียงหัวเราะ</strong>
-              <span>ฮากระจายสร้างบรรยากาศ</span>
+              <span>ฮากระจาย ซิตคอม</span>
             </button>
             <button class="sfx-btn" data-sfx="fanfare">
               <span class="icon">🏆</span>
               <strong>ชัยชนะ</strong>
               <span>เพลงฉลองคนร้องเก่ง</span>
+            </button>
+            <button class="sfx-btn" data-sfx="whistle">
+              <span class="icon">😙</span>
+              <strong>ผิวปาก</strong>
+              <span>วี้ดวิ้วแซวนักร้อง</span>
             </button>
           </div>
 
