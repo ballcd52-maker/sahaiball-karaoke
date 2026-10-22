@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SahaiBall Karaoke - คาราโอเกะจอทีวี</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;600;700&family=Prompt:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/display.css">
+  <script src="/socket.io/socket.io.js"></script>
+</head>
+<body>
+  <div class="ktv-wrapper" id="ktvWrapper">
+    <!-- YouTube Player Container -->
+    <div id="playerContainer" class="player-container">
+      <div id="ytPlayer"></div>
+    </div>
+
+    <!-- Video Overlay Mask (prevents accidental clicks / keeps KTV clean) -->
+    <div class="player-mask"></div>
+
+    <!-- Idle / Standby Screen (Shown when queue is empty) -->
+    <div id="idleScreen" class="idle-screen active">
+      <div class="idle-ambient-glow"></div>
+      
+      <div class="idle-content">
+        <div class="brand-badge">
+          <span class="icon">🎤</span>
+          <span>SahaiBall Karaoke</span>
+        </div>
+        
+        <h1 class="idle-title">พร้อมร้องเพลงแล้ว!</h1>
+        <p class="idle-subtitle">ใช้โทรศัพท์มือถือเปิดกล้องสแกน QR Code เพื่อค้นหาเพลงและส่งเข้าคิวได้ทันที</p>
+
+        <div class="qr-box">
+          <img id="idleQrImage" src="" alt="Scan QR Code to Order Songs">
+          <div class="qr-label">
+            <span class="pulse-dot"></span>
+            <span id="idleQrUrl">สแกนเพื่อสั่งเพลง</span>
+          </div>
+        </div>
+
+        <div class="idle-tips">
+          <div class="tip-pill">📱 ไม่ต้องลงแอป</div>
+          <div class="tip-pill">🔍 ค้นหาเพลงจาก YouTube ได้ทุกเพลง</div>
+          <div class="tip-pill">🎙️ ตัดเสียงร้อง/สลับเวอร์ชันได้</div>
+          <div class="tip-pill">🚀 จัดคิวร่วมกันได้หลายเครื่อง</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Now Playing Overlay Bar (Top of Screen) -->
+    <div id="topOverlay" class="top-overlay">
+      <div class="now-playing-card">
+        <div class="music-icon-animated">
+          <span></span><span></span><span></span><span></span>
+        </div>
+        <div class="song-meta">
+          <div class="now-playing-label">กำลังเล่น</div>
+          <div id="nowPlayingTitle" class="song-title">ชื่อเพลง...</div>
+        </div>
+        <div id="requesterBadge" class="requester-badge">
+          <span>👤 ขอโดย: มือถือ</span>
+        </div>
+        <div id="vocalModeBadge" class="vocal-badge">
+          <span>🔊 สเตอริโอปกติ</span>
+        </div>
+        <div id="keyBadge" class="param-badge" style="display:none;">
+          <span>🎼 คีย์: 0</span>
+        </div>
+        <div id="speedBadge" class="param-badge" style="display:none;">
+          <span>⚡ 1.0x</span>
+        </div>
+      </div>
+
+      <!-- Up Next Queue Pill -->
+      <div id="upNextCard" class="up-next-card">
+        <span class="up-next-label">คิวถัดไป:</span>
+        <span id="upNextTitle" class="up-next-title">ยังไม่มีเพลงในคิว</span>
+      </div>
+    </div>
+
+    <!-- Danmaku / Live Floating Reactions Area -->
+    <div id="danmakuContainer" class="danmaku-container"></div>
+
+    <!-- Bottom Progress & Control Bar -->
+    <div id="bottomBar" class="bottom-bar">
+      <div class="progress-bar-container">
+        <div id="progressBar" class="progress-bar-fill"></div>
+      </div>
+      <div class="time-display">
+        <span id="timeCurrent">00:00</span>
+        <span>/</span>
+        <span id="timeDuration">00:00</span>
+      </div>
+    </div>
+
+    <!-- Virtual Score Overlay Screen (KTV Scoring) -->
+    <div id="scoreScreen" class="score-screen">
+      <div class="score-card">
+        <div class="score-header">
+          <span class="score-crown">👑</span>
+          <h2>SahaiBall KARAOKE SCORE</h2>
+          <div class="stars-row">⭐⭐⭐⭐⭐</div>
+        </div>
+
+        <div class="score-main">
+          <div id="scoreGrade" class="score-grade">SS</div>
+          <div class="score-number-box">
+            <span id="scoreNumber" class="score-number">98</span>
+            <span class="score-pts">PTS</span>
+          </div>
+        </div>
+
+        <div class="score-details">
+          <div id="scoreSongTitle" class="score-song-title">ชื่อเพลง</div>
+          <div id="scoreSinger" class="score-singer">👤 นักร้อง: คุณมุก</div>
+          <div id="scoreComment" class="score-comment">"เสียงระดับแชมป์ The Voice! ไพเราะจับใจคนทั้งห้อง!"</div>
+        </div>
+
+        <div class="score-footer">
+          <div class="score-countdown-bar">
+            <div id="scoreCountdownFill" class="score-countdown-fill"></div>
+          </div>
+          <div class="score-countdown-text">กำลังเตรียมเพลงถัดไปใน <span id="scoreTimerNum">6</span> วินาที...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Corner Mini QR Code (Visible during video playback) -->
+    <div class="corner-qr" id="cornerQr" title="สแกนเพื่อสั่งเพลง">
+      <img id="cornerQrImg" src="" alt="QR">
+      <span>สั่งเพลง</span>
+    </div>
+
+    <!-- Fullscreen Toggle Button -->
+    <button id="fullscreenBtn" class="fullscreen-btn" title="เต็มจอ (F11)">
+      <svg viewBox="0 0 24 24" width="24" height="24">
+        <path fill="currentColor" d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
+      </svg>
+    </button>
+  </div>
+
+  <script src="https://www.youtube.com/iframe_api"></script>
+  <script src="/js/display.js"></script>
+</body>
+</html>

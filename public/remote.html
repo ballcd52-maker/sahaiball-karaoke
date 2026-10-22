@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>SahaiBall Karaoke - รีโมทสั่งเพลง</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/remote.css">
+  <script src="/socket.io/socket.io.js"></script>
+</head>
+<body>
+  <div class="app-container">
+    <!-- Top Bar -->
+    <header class="app-header">
+      <div class="header-brand">
+        <span class="logo-icon">🎤</span>
+        <div class="brand-text">
+          <h1>SahaiBall KARAOKE</h1>
+          <span class="status-online"><span class="dot"></span> เชื่อมต่อทีวีแล้ว</span>
+        </div>
+      </div>
+      
+      <div class="user-badge" id="userBadgeBtn">
+        <span class="user-avatar">👤</span>
+        <span id="userNameDisplay">ฉันเอง</span>
+      </div>
+    </header>
+
+    <!-- Mini Player (Current Song Banner) -->
+    <section class="mini-player" id="miniPlayer">
+      <div class="mini-player-content">
+        <img id="miniThumb" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='60' viewBox='0 0 60 60'%3E%3Crect width='60' height='60' fill='%231e1b4b'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-size='24' fill='%23a855f7'%3E🎤%3C/text%3E%3C/svg%3E" alt="Thumb">
+        <div class="mini-meta">
+          <div class="mini-status" id="miniStatus">กำลังเล่นอยู่บนจอทีวี</div>
+          <div class="mini-title" id="miniTitle">ยังไม่มีเพลงที่เล่น</div>
+          <div class="mini-requester" id="miniRequester">ขอโดย: -</div>
+        </div>
+        <div class="mini-controls">
+          <button id="miniPlayBtn" class="icon-btn" title="เล่น/หยุด">▶</button>
+          <button id="miniSkipBtn" class="icon-btn" title="ข้ามเพลง">⏭</button>
+        </div>
+      </div>
+      <div class="mini-progress-track">
+        <div id="miniProgressBar" class="mini-progress-fill"></div>
+      </div>
+    </section>
+
+    <!-- Main Content Tabs -->
+    <main class="app-body">
+      <!-- TAB 1: SEARCH (DEFAULT) -->
+      <section id="tabSearch" class="tab-view active">
+        <div class="search-box">
+          <div class="search-input-wrapper">
+            <span class="search-icon">🔍</span>
+            <input type="text" id="searchInput" placeholder="พิมพ์ชื่อเพลง หรือ ศิลปิน..." autocomplete="off">
+            <button id="searchClearBtn" class="clear-btn">&times;</button>
+          </div>
+          
+          <div class="search-filters">
+            <label class="filter-toggle">
+              <input type="checkbox" id="filterKaraoke" checked>
+              <span class="toggle-slider"></span>
+              <span class="toggle-label">🎯 เน้นเพลงคาราโอเกะ</span>
+            </label>
+          </div>
+
+          <!-- Quick Chips -->
+          <div class="quick-chips">
+            <button class="chip" data-query="คาราโอเกะ ฮิต">🔥 เพลงฮิต</button>
+            <button class="chip" data-query="COCKTAIL คาราโอเกะ">COCKTAIL</button>
+            <button class="chip" data-query="Tilly Birds คาราโอเกะ">Tilly Birds</button>
+            <button class="chip" data-query="Bodyslam คาราโอเกะ">Bodyslam</button>
+            <button class="chip" data-query="Three Man Down คาราโอเกะ">Three Man Down</button>
+            <button class="chip" data-query="ลูกทุ่ง คาราโอเกะ">ลูกทุ่งฮิต</button>
+          </div>
+        </div>
+
+        <!-- Search Results List -->
+        <div class="results-container">
+          <div id="searchLoading" class="loading-spinner" style="display: none;">
+            <div class="spinner"></div>
+            <span>กำลังค้นหาเพลงจาก YouTube...</span>
+          </div>
+
+          <div id="searchEmpty" class="empty-state">
+            <div class="empty-icon">🎵</div>
+            <h3>ค้นหาเพลงโปรดของคุณ</h3>
+            <p>พิมพ์ชื่อเพลงด้านบน หรือกดเลือกจากแท็กยอดนิยมเพื่อร้องเพลง</p>
+          </div>
+
+          <div id="resultsList" class="results-list"></div>
+        </div>
+      </section>
+
+      <!-- TAB 2: QUEUE -->
+      <section id="tabQueue" class="tab-view">
+        <div class="queue-header">
+          <div class="queue-info">
+            <h2>คิวเพลงทั้งหมด</h2>
+            <span id="queueCountBadge" class="count-badge">0 เพลง</span>
+          </div>
+          <button id="clearQueueBtn" class="text-danger-btn">ล้างคิวทั้งหมด</button>
+        </div>
+
+        <div id="queueEmpty" class="empty-state" style="display: none;">
+          <div class="empty-icon">📭</div>
+          <h3>คิวเพลงว่างอยู่</h3>
+          <p>ไปที่แท็บค้นหาเพื่อเลือกเพลงมาร้องได้เลย!</p>
+        </div>
+
+        <div id="queueList" class="queue-list"></div>
+      </section>
+
+      <!-- TAB 3: CONTROLS & VOCAL -->
+      <section id="tabControls" class="tab-view">
+        <div class="controls-panel">
+          <h2>🎛️ แผงควบคุมเครื่องเล่น</h2>
+
+          <!-- Main Playback Controls -->
+          <div class="control-grid-main">
+            <button id="ctrlRestartBtn" class="ctrl-btn secondary">
+              <span class="icon">⏮</span>
+              <span>เริ่มใหม่</span>
+            </button>
+            <button id="ctrlPlayPauseBtn" class="ctrl-btn primary large">
+              <span class="icon" id="ctrlPlayIcon">▶</span>
+              <span id="ctrlPlayText">เล่นต่อ</span>
+            </button>
+            <button id="ctrlSkipBtn" class="ctrl-btn secondary">
+              <span class="icon">⏭</span>
+              <span>ข้ามเพลง</span>
+            </button>
+          </div>
+
+          <!-- Volume Controls (Music & SFX Independent) -->
+          <div class="volume-card">
+            <div class="volume-label">
+              <span>🔊 ระดับเสียงดนตรี</span>
+              <span id="volumeVal">100%</span>
+            </div>
+            <input type="range" id="volumeSlider" min="0" max="100" value="100" class="custom-slider">
+
+            <div class="volume-label" style="margin-top: 15px;">
+              <span>📢 ระดับเสียงเอฟเฟกต์ / จิงเกิล</span>
+              <span id="sfxVolumeVal">100%</span>
+            </div>
+            <input type="range" id="sfxVolumeSlider" min="0" max="100" value="100" class="custom-slider">
+          </div>
+
+          <!-- Key Control (Pitch Shifter) -->
+          <div class="vocal-card">
+            <div class="card-header-flex">
+              <div>
+                <h3>🎼 ปรับคีย์เพลง (Key Control)</h3>
+                <p class="card-desc">เพิ่มหรือลดระดับเสียงให้เข้ากับเรนจ์เสียงของผู้ร้อง (ชาย/หญิง)</p>
+              </div>
+              <button id="keyResetBtn" class="sm-tag-btn">รีเซ็ตคีย์</button>
+            </div>
+            <div class="key-control-grid">
+              <button id="keyMinusBtn" class="key-step-btn" title="ลดคีย์">－ คีย์ต่ำลง</button>
+              <div class="key-display-box">
+                <span id="keyDisplayVal" class="key-current">0</span>
+                <span id="keyDescText" class="key-sub">คีย์ปกติ (Original)</span>
+              </div>
+              <button id="keyPlusBtn" class="key-step-btn" title="เพิ่มคีย์">＋ คีย์สูงขึ้น</button>
+            </div>
+          </div>
+
+          <!-- Tempo / Speed Control -->
+          <div class="vocal-card">
+            <h3>⚡ ปรับความเร็วเพลง (Tempo Control)</h3>
+            <p class="card-desc">เร่งจังหวะให้สนุกขึ้น หรือชะลอความเร็วเพลงร้องง่ายขึ้น</p>
+            <div class="speed-btn-group">
+              <button class="speed-btn" data-speed="0.75">0.75x</button>
+              <button class="speed-btn" data-speed="0.85">0.85x</button>
+              <button class="speed-btn active" data-speed="1.0">1.0x (ปกติ)</button>
+              <button class="speed-btn" data-speed="1.1">1.1x</button>
+              <button class="speed-btn" data-speed="1.25">1.25x</button>
+            </div>
+          </div>
+
+          <!-- Vocal Cut & Mode Switch -->
+          <div class="vocal-card">
+            <h3>🎙️ ระบบสลับและตัดเสียงร้อง</h3>
+            <p class="card-desc">เลือกวิธีปรับแต่งเสียงร้องสำหรับเพลงที่กำลังเล่น</p>
+
+            <div class="vocal-buttons">
+              <!-- Smart Video Swap -->
+              <button id="vocalSwapBtn" class="vocal-action-btn">
+                <div class="btn-icon">⚡</div>
+                <div class="btn-text">
+                  <strong>สลับเป็นเวอร์ชันดนตรี (Karaoke Swap)</strong>
+                  <span>สลับคลิปเป็นเวอร์ชันคาราโอเกะ/ดนตรีทันที</span>
+                </div>
+              </button>
+
+              <!-- Software Vocal Suppression / Channel Cut -->
+              <button id="vocalCutBtn" class="vocal-action-btn">
+                <div class="btn-icon">✂️</div>
+                <div class="btn-text">
+                  <strong id="vocalCutTitle">ตัดเสียงร้อง (Vocal Suppression)</strong>
+                  <span id="vocalCutDesc">ลดเสียงร้องแชนเนลตรงกลาง / สเตอริโอ</span>
+                </div>
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 4: LIVE REACTIONS / CHEER & SOUNDBOARD -->
+      <section id="tabReactions" class="tab-view">
+        <div class="reactions-panel">
+          <h2>📢 ซาวด์เอฟเฟกต์ & จิงเกิลปาร์ตี้ (Soundboard)</h2>
+          <p class="subtitle">กดเล่นเสียงประกอบบรรยากาศ ให้เสียงดังออกลำโพงทีวีทันที!</p>
+
+          <div class="sfx-grid">
+            <button class="sfx-btn" data-sfx="applause">
+              <span class="icon">👏</span>
+              <strong>เสียงปรบมือ</strong>
+              <span>เสียงเฮเชียร์ลั่นห้อง</span>
+            </button>
+            <button class="sfx-btn" data-sfx="horn">
+              <span class="icon">🎺</span>
+              <strong>แตรปาร์ตี้</strong>
+              <span>แตรตื๊ดๆ สไตล์ DJ</span>
+            </button>
+            <button class="sfx-btn" data-sfx="drumroll">
+              <span class="icon">🥁</span>
+              <strong>รัวกลอง</strong>
+              <span>ลุ้นคะแนน / ช่วงตื่นเต้น</span>
+            </button>
+            <button class="sfx-btn" data-sfx="rimshot">
+              <span class="icon">💥</span>
+              <strong>ตึ่งโป๊ะ!</strong>
+              <span>เล่นมุกตลก / จังหวะฮา</span>
+            </button>
+            <button class="sfx-btn" data-sfx="laugh">
+              <span class="icon">😂</span>
+              <strong>เสียงหัวเราะ</strong>
+              <span>ฮากระจายสร้างบรรยากาศ</span>
+            </button>
+            <button class="sfx-btn" data-sfx="fanfare">
+              <span class="icon">🏆</span>
+              <strong>ชัยชนะ</strong>
+              <span>เพลงฉลองคนร้องเก่ง</span>
+            </button>
+          </div>
+
+          <h2 style="margin-top: 25px;">🎉 ส่งข้อความ & สติกเกอร์ขึ้นจอทีวี</h2>
+          <p class="subtitle">กดสติกเกอร์หรือส่งข้อความให้ลอยขึ้นหน้าจอทีวีแบบสดๆ!</p>
+
+          <div class="emoji-grid">
+            <button class="emoji-btn" data-emoji="🎤">🎤</button>
+            <button class="emoji-btn" data-emoji="❤️">❤️</button>
+            <button class="emoji-btn" data-emoji="👏">👏</button>
+            <button class="emoji-btn" data-emoji="🔥">🔥</button>
+            <button class="emoji-btn" data-emoji="🎉">🎉</button>
+            <button class="emoji-btn" data-emoji="🍻">🍻</button>
+            <button class="emoji-btn" data-emoji="💃">💃</button>
+            <button class="emoji-btn" data-emoji="👑">👑</button>
+            <button class="emoji-btn" data-emoji="😂">😂</button>
+            <button class="emoji-btn" data-emoji="🌟">🌟</button>
+          </div>
+
+          <div class="quick-messages">
+            <button class="msg-btn">ร้องเพราะมากกกก! 👏</button>
+            <button class="msg-btn">เสียงดีระดับเดอะวอยซ์! 🌟</button>
+            <button class="msg-btn">เพลงนี้ต้องชนแก้ว! 🍻</button>
+            <button class="msg-btn">ใครขอเพลงนี้มาร้องด้วยกัน! 🎤</button>
+            <button class="msg-btn">ขอแซงคิวนิสนึงงง 🚀</button>
+          </div>
+
+          <div class="custom-danmaku-form">
+            <input type="text" id="danmakuInput" placeholder="พิมพ์ข้อความเชียร์ลอยขึ้นจอ..." maxlength="50">
+            <button id="sendDanmakuBtn" class="send-btn">ส่งขึ้นจอ 🚀</button>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Bottom Navigation Bar -->
+    <nav class="bottom-nav">
+      <button class="nav-item active" data-tab="tabSearch">
+        <span class="nav-icon">🔍</span>
+        <span class="nav-label">ค้นหาเพลง</span>
+      </button>
+      <button class="nav-item" data-tab="tabQueue">
+        <span class="nav-icon">📋</span>
+        <span class="nav-label">คิวเพลง</span>
+        <span id="navQueueBadge" class="nav-badge" style="display:none;">0</span>
+      </button>
+      <button class="nav-item" data-tab="tabControls">
+        <span class="nav-icon">🎛️</span>
+        <span class="nav-label">ควบคุม</span>
+      </button>
+      <button class="nav-item" data-tab="tabReactions">
+        <span class="nav-icon">🎉</span>
+        <span class="nav-label">ส่งเชียร์</span>
+      </button>
+    </nav>
+
+    <!-- User Nickname Modal -->
+    <div id="nicknameModal" class="modal-overlay">
+      <div class="modal-box">
+        <h3>👤 ตั้งชื่อของคุณ</h3>
+        <p>ชื่อนี้จะแสดงบนจอทีวีตอนขอเพลงและส่งข้อความเชียร์</p>
+        <input type="text" id="nicknameInput" placeholder="ใส่ชื่อเล่นของคุณ..." maxlength="20">
+        <div class="modal-actions">
+          <button id="saveNicknameBtn" class="modal-btn primary">บันทึกชื่อ</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Toast Notification Popup -->
+    <div id="toast" class="toast-popup"></div>
+  </div>
+
+  <script src="/js/remote.js"></script>
+</body>
+</html>
