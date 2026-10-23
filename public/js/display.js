@@ -60,8 +60,11 @@ const idleQrUrl = document.getElementById('idleQrUrl');
 const cornerQr = document.getElementById('cornerQr');
 const cornerQrImg = document.getElementById('cornerQrImg');
 
-const audioUnlockModal = document.getElementById('audioUnlockModal');
-const unlockAudioBtn = document.getElementById('unlockAudioBtn');
+const tvPlayOverlay = document.getElementById('tvPlayOverlay');
+const tvPlayBtn = document.getElementById('tvPlayBtn');
+const tvErrorNotice = document.getElementById('tvErrorNotice');
+const tvErrorText = document.getElementById('tvErrorText');
+
 const nextSingerAlert = document.getElementById('nextSingerAlert');
 const alertNextSongTitle = document.getElementById('alertNextSongTitle');
 const alertNextSinger = document.getElementById('alertNextSinger');
@@ -93,6 +96,35 @@ const scoreComment = document.getElementById('scoreComment');
 const scoreCountdownFill = document.getElementById('scoreCountdownFill');
 const scoreTimerNum = document.getElementById('scoreTimerNum');
 
+function showTvPlayOverlay() {
+  if (tvPlayOverlay) tvPlayOverlay.classList.add('active');
+}
+
+function hideTvPlayOverlay() {
+  if (tvPlayOverlay) tvPlayOverlay.classList.remove('active');
+}
+
+function showTvErrorNotice(text) {
+  if (tvErrorText) tvErrorText.textContent = text;
+  if (tvErrorNotice) tvErrorNotice.classList.add('active');
+}
+
+function hideTvErrorNotice() {
+  if (tvErrorNotice) tvErrorNotice.classList.remove('active');
+}
+
+if (tvPlayBtn) {
+  tvPlayBtn.addEventListener('click', () => {
+    if (player) {
+      if (player.unMute) player.unMute();
+      if (player.playVideo) player.playVideo();
+    }
+    const ctx = getAudioContext();
+    if (ctx && ctx.state === 'suspended') ctx.resume();
+    hideTvPlayOverlay();
+  });
+}
+
 // YouTube IFrame API Ready Callback
 function onYouTubeIframeAPIReady() {
   player = new YT.Player('ytPlayer', {
@@ -106,7 +138,8 @@ function onYouTubeIframeAPIReady() {
       iv_load_policy: 3,
       modestbranding: 1,
       rel: 0,
-      origin: window.location.origin
+      enablejsapi: 1,
+      playsinline: 1
     },
     events: {
       onReady: onPlayerReady,
@@ -125,8 +158,11 @@ function onPlayerReady(event) {
 function onPlayerStateChange(event) {
   if (event.data === YT.PlayerState.ENDED) {
     console.log('Song ended, showing performance score...');
+    hideTvPlayOverlay();
     showPerformanceScore();
   } else if (event.data === YT.PlayerState.PLAYING) {
+    hideTvPlayOverlay();
+    hideTvErrorNotice();
     startProgressTracker();
     showTopOverlay(10000);
     socket.emit('tv:state_update', {
@@ -141,14 +177,35 @@ function onPlayerStateChange(event) {
       currentTime: player.getCurrentTime(),
       duration: player.getDuration()
     });
+  } else if (event.data === YT.PlayerState.CUED) {
+    console.log('Video cued, attempting auto-play...');
+    if (player && player.playVideo) player.playVideo();
+    setTimeout(() => {
+      if (player && player.getPlayerState && player.getPlayerState() !== YT.PlayerState.PLAYING) {
+        console.log('Unmuted autoplay blocked by TV browser, trying muted autoplay fallback...');
+        if (player.mute) player.mute();
+        if (player.playVideo) player.playVideo();
+        showTvPlayOverlay();
+      }
+    }, 1200);
   }
 }
 
 function onPlayerError(e) {
   console.warn('YouTube Player Error:', e.data);
+  let msg = 'เกิดข้อผิดพลาดในการโหลดวิดีโอ';
+  if (e.data === 150 || e.data === 101) {
+    msg = '⚠️ คลิปนี้ติดลิขสิทธิ์ไม่อนุญาตให้เล่นนอก YouTube กำลังข้ามไปเพลงถัดไป...';
+  } else if (e.data === 100) {
+    msg = '⚠️ ไม่พบคลิปนี้ หรือคลิปถูกลบ กำลังข้ามไปเพลงถัดไป...';
+  } else if (e.data === 2) {
+    msg = '⚠️ รหัสวิดีโอไม่ถูกต้อง กำลังข้าม...';
+  }
+  showTvErrorNotice(msg);
   setTimeout(() => {
+    hideTvErrorNotice();
     socket.emit('tv:song_ended');
-  }, 2000);
+  }, 4000);
 }
 
 let currentQueue = [];
@@ -253,11 +310,14 @@ socket.on('tv:command', (cmd) => {
   switch (cmd.action) {
     case 'load_video':
       hideScoreScreen();
+      hideTvPlayOverlay();
+      hideTvErrorNotice();
       loadVideo(cmd.videoId);
       break;
     case 'play':
       hideScoreScreen();
-      if (player.playVideo) player.playVideo();
+      hideTvPlayOverlay();
+      if (player && player.playVideo) player.playVideo();
       break;
     case 'pause':
       if (player.pauseVideo) player.pauseVideo();
@@ -305,6 +365,8 @@ function loadVideo(videoId) {
   currentVideoId = videoId;
   hasTriggeredNextAlert = false;
   hideNextSingerAlert();
+  hideTvPlayOverlay();
+  hideTvErrorNotice();
   idleScreen.classList.remove('active');
   cornerQr.style.display = 'flex';
   topOverlay.style.display = 'flex';
@@ -315,6 +377,9 @@ function loadVideo(videoId) {
       videoId: videoId,
       suggestedQuality: 'hd1080'
     });
+    if (player.playVideo) {
+      player.playVideo();
+    }
   }
 }
 
@@ -322,6 +387,8 @@ function showIdleScreen() {
   currentVideoId = null;
   hasTriggeredNextAlert = false;
   hideNextSingerAlert();
+  hideTvPlayOverlay();
+  hideTvErrorNotice();
   idleScreen.classList.add('active');
   cornerQr.style.display = 'none';
   topOverlay.style.display = 'none';
@@ -748,19 +815,6 @@ function updateBoostBadge(isBoosted) {
   if (player && player.setVolume) {
     player.setVolume(isBoosted ? 100 : 80);
   }
-}
-
-// Audio Unlock Splash Modal Handler
-if (unlockAudioBtn && audioUnlockModal) {
-  unlockAudioBtn.addEventListener('click', () => {
-    audioUnlockModal.classList.remove('active');
-    const ctx = getAudioContext();
-    if (ctx && ctx.state === 'suspended') ctx.resume();
-    preloadSFX();
-    if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
-      document.documentElement.requestFullscreen().catch(() => {});
-    }
-  });
 }
 
 // Cyber Clock

@@ -17,23 +17,21 @@
       <div id="ytPlayer"></div>
     </div>
 
-    <!-- Video Overlay Mask (prevents accidental clicks / keeps KTV clean) -->
+    <!-- Video Overlay Mask (keeps KTV clean) -->
     <div class="player-mask"></div>
 
-    <!-- Audio Unlock & Fullscreen Splash (First Interaction Gate) -->
-    <div id="audioUnlockModal" class="audio-unlock-modal active">
-      <div class="unlock-card">
-        <div class="unlock-halo"></div>
-        <div class="unlock-icon">🎤</div>
-        <div class="unlock-tag">NEXT-GEN KTV ENTERTAINMENT</div>
-        <h2>SahaiBall KARAOKE</h2>
-        <p>แตะหน้าจอหรือกดปุ่มเพื่อเริ่มต้นระบบคาราโอเกะเต็มจอ และเปิดใช้งานระบบเสียงสตูดิโอ</p>
-        <button id="unlockAudioBtn" class="unlock-btn">
-          <span class="btn-shine"></span>
-          <span class="btn-text">🚀 เข้าสู่ระบบคาราโอเกะ (START)</span>
-        </button>
-        <div class="unlock-hint">ระบบรองรับการกด F11 เพื่อสลับโหมดเต็มจอบนทีวีได้ตลอดเวลา</div>
-      </div>
+    <!-- TV Play & Unmute Fallback Overlay (Shown only if browser blocks autoplay) -->
+    <div id="tvPlayOverlay" class="tv-play-overlay">
+      <button id="tvPlayBtn" class="tv-play-btn">
+        <span class="icon">▶</span>
+        <span>กด OK หรือแตะที่นี่เพื่อเล่นเพลง</span>
+      </button>
+    </div>
+
+    <!-- TV Error Notice (Copyright / Embedding restrictions) -->
+    <div id="tvErrorNotice" class="tv-error-notice">
+      <span class="icon">⚠️</span>
+      <span id="tvErrorText">กำลังโหลด...</span>
     </div>
 
     <!-- Idle / Standby Screen (Shown when queue is empty) -->
