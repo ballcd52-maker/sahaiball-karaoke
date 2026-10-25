@@ -155,12 +155,16 @@ function onPlayerReady(event) {
   socket.emit('request:sync');
 }
 
+let autoplayCheckTimer = null;
+
 function onPlayerStateChange(event) {
   if (event.data === YT.PlayerState.ENDED) {
     console.log('Song ended, showing performance score...');
+    clearTimeout(autoplayCheckTimer);
     hideTvPlayOverlay();
     showPerformanceScore();
   } else if (event.data === YT.PlayerState.PLAYING) {
+    clearTimeout(autoplayCheckTimer);
     hideTvPlayOverlay();
     hideTvErrorNotice();
     startProgressTracker();
@@ -177,17 +181,13 @@ function onPlayerStateChange(event) {
       currentTime: player.getCurrentTime(),
       duration: player.getDuration()
     });
+  } else if (event.data === YT.PlayerState.BUFFERING) {
+    console.log('Video buffering...');
+    hideTvPlayOverlay();
+    hideTvErrorNotice();
   } else if (event.data === YT.PlayerState.CUED) {
     console.log('Video cued, attempting auto-play...');
     if (player && player.playVideo) player.playVideo();
-    setTimeout(() => {
-      if (player && player.getPlayerState && player.getPlayerState() !== YT.PlayerState.PLAYING) {
-        console.log('Unmuted autoplay blocked by TV browser, trying muted autoplay fallback...');
-        if (player.mute) player.mute();
-        if (player.playVideo) player.playVideo();
-        showTvPlayOverlay();
-      }
-    }, 1200);
   }
 }
 
@@ -317,7 +317,13 @@ socket.on('tv:command', (cmd) => {
     case 'play':
       hideScoreScreen();
       hideTvPlayOverlay();
-      if (player && player.playVideo) player.playVideo();
+      if (player) {
+        if (player.isMuted && player.isMuted()) {
+          if (player.unMute) player.unMute();
+          if (player.setVolume) player.setVolume(100);
+        }
+        if (player.playVideo) player.playVideo();
+      }
       break;
     case 'pause':
       if (player.pauseVideo) player.pauseVideo();
@@ -368,28 +374,55 @@ function loadVideo(videoId) {
   hideTvPlayOverlay();
   hideTvErrorNotice();
   idleScreen.classList.remove('active');
+  stopIdleCanvas();
   cornerQr.style.display = 'flex';
   topOverlay.style.display = 'flex';
   showTopOverlay(10000);
 
   if (player && player.loadVideoById) {
+    if (player.unMute) player.unMute();
+    if (player.setVolume) player.setVolume(100);
+
     player.loadVideoById({
       videoId: videoId,
-      suggestedQuality: 'hd1080'
+      suggestedQuality: 'hd720'
     });
     if (player.playVideo) {
       player.playVideo();
     }
   }
+
+  // Graceful autoplay watchdog: allow up to 6s for buffering before attempting fallback
+  clearTimeout(autoplayCheckTimer);
+  autoplayCheckTimer = setTimeout(() => {
+    if (player && player.getPlayerState) {
+      const state = player.getPlayerState();
+      if (state !== YT.PlayerState.PLAYING && state !== YT.PlayerState.BUFFERING) {
+        console.warn('Playback did not start automatically after 6s. Retrying play...');
+        if (player.playVideo) player.playVideo();
+        setTimeout(() => {
+          const s2 = player.getPlayerState();
+          if (s2 !== YT.PlayerState.PLAYING && s2 !== YT.PlayerState.BUFFERING) {
+            console.warn('Attempting muted fallback to unblock autoplay...');
+            if (player.mute) player.mute();
+            if (player.playVideo) player.playVideo();
+            showTvPlayOverlay();
+          }
+        }, 2000);
+      }
+    }
+  }, 6000);
 }
 
 function showIdleScreen() {
+  clearTimeout(autoplayCheckTimer);
   currentVideoId = null;
   hasTriggeredNextAlert = false;
   hideNextSingerAlert();
   hideTvPlayOverlay();
   hideTvErrorNotice();
   idleScreen.classList.add('active');
+  startIdleCanvas();
   cornerQr.style.display = 'none';
   topOverlay.style.display = 'none';
   topOverlay.classList.remove('overlay-hidden');
@@ -830,52 +863,91 @@ function initCyberClock() {
 }
 initCyberClock();
 
-// Futuristic Idle Wave Canvas
-function initIdleCanvas() {
-  const canvas = document.getElementById('idleVisualizerCanvas');
-  if (!canvas) return;
-  const ctx = canvas.getContext('2d');
-  let animationFrameId;
-  let phase = 0;
+// Lightweight Idle Wave Canvas (Stops during video playback to save 100% GPU)
+let idleAnimationFrameId = null;
+let isIdleCanvasRunning = false;
+let idleCanvasCtx = null;
+let idleCanvasPhase = 0;
+let idleCanvasElement = null;
 
-  function resize() {
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
+function resizeIdleCanvas() {
+  if (!idleCanvasElement) return;
+  idleCanvasElement.width = window.innerWidth;
+  idleCanvasElement.height = window.innerHeight;
+}
+
+function startIdleCanvas() {
+  if (isIdleCanvasRunning || !idleCanvasElement) return;
+  isIdleCanvasRunning = true;
+  drawIdleCanvas();
+}
+
+function stopIdleCanvas() {
+  isIdleCanvasRunning = false;
+  if (idleAnimationFrameId) {
+    cancelAnimationFrame(idleAnimationFrameId);
+    idleAnimationFrameId = null;
   }
-  resize();
-  window.addEventListener('resize', resize);
+  if (idleCanvasCtx && idleCanvasElement) {
+    idleCanvasCtx.clearRect(0, 0, idleCanvasElement.width, idleCanvasElement.height);
+  }
+}
 
-  function draw() {
-    if (!idleScreen || !idleScreen.classList.contains('active')) {
-      animationFrameId = requestAnimationFrame(draw);
-      return;
+function drawIdleCanvas() {
+  if (!isIdleCanvasRunning || !idleScreen || !idleScreen.classList.contains('active')) {
+    isIdleCanvasRunning = false;
+    return;
+  }
+  if (!idleCanvasCtx || !idleCanvasElement) return;
+
+  idleCanvasCtx.clearRect(0, 0, idleCanvasElement.width, idleCanvasElement.height);
+  idleCanvasPhase += 0.02;
+
+  const centerY = idleCanvasElement.height * 0.72;
+  const waves = [
+    { color: 'rgba(0, 240, 255, 0.28)', freq: 0.003, amp: 45, speed: 1.0 },
+    { color: 'rgba(168, 85, 247, 0.25)', freq: 0.004, amp: 35, speed: 0.7 },
+    { color: 'rgba(244, 63, 94, 0.20)', freq: 0.002, amp: 55, speed: -0.5 }
+  ];
+
+  waves.forEach(w => {
+    idleCanvasCtx.beginPath();
+    idleCanvasCtx.strokeStyle = w.color;
+    idleCanvasCtx.lineWidth = 2.5;
+    for (let x = 0; x < idleCanvasElement.width; x += 16) {
+      const y = centerY + Math.sin(x * w.freq + idleCanvasPhase * w.speed) * w.amp + Math.cos((x * 0.002) + idleCanvasPhase) * 15;
+      if (x === 0) idleCanvasCtx.moveTo(x, y);
+      else idleCanvasCtx.lineTo(x, y);
     }
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    phase += 0.02;
+    idleCanvasCtx.stroke();
+  });
 
-    const centerY = canvas.height * 0.72;
-    const waves = [
-      { color: 'rgba(0, 240, 255, 0.28)', freq: 0.003, amp: 45, speed: 1.0 },
-      { color: 'rgba(168, 85, 247, 0.25)', freq: 0.004, amp: 35, speed: 0.7 },
-      { color: 'rgba(244, 63, 94, 0.20)', freq: 0.002, amp: 55, speed: -0.5 }
-    ];
+  idleAnimationFrameId = requestAnimationFrame(drawIdleCanvas);
+}
 
-    waves.forEach(w => {
-      ctx.beginPath();
-      ctx.strokeStyle = w.color;
-      ctx.lineWidth = 3;
-      ctx.shadowBlur = 18;
-      ctx.shadowColor = w.color;
-      for (let x = 0; x < canvas.width; x += 6) {
-        const y = centerY + Math.sin(x * w.freq + phase * w.speed) * w.amp + Math.cos((x * 0.002) + phase) * 15;
-        if (x === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
-      }
-      ctx.stroke();
-    });
-
-    animationFrameId = requestAnimationFrame(draw);
-  }
-  draw();
+function initIdleCanvas() {
+  idleCanvasElement = document.getElementById('idleVisualizerCanvas');
+  if (!idleCanvasElement) return;
+  idleCanvasCtx = idleCanvasElement.getContext('2d');
+  resizeIdleCanvas();
+  window.addEventListener('resize', resizeIdleCanvas);
+  startIdleCanvas();
 }
 initIdleCanvas();
+
+// TV Remote Key Handler (DPAD_CENTER, ENTER, SPACE, MEDIA_PLAY_PAUSE)
+document.addEventListener('keydown', (e) => {
+  const code = e.keyCode || e.which;
+  if (code === 13 || code === 23 || code === 32 || code === 179 || code === 85 || code === 66) {
+    if (player) {
+      if (player.isMuted && player.isMuted()) {
+        if (player.unMute) player.unMute();
+        if (player.setVolume) player.setVolume(100);
+      }
+      if (player.playVideo) player.playVideo();
+    }
+    const ctx = getAudioContext();
+    if (ctx && ctx.state === 'suspended') ctx.resume();
+    hideTvPlayOverlay();
+  }
+});
