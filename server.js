@@ -639,11 +639,61 @@ io.on('connection', (socket) => {
     playNextSongInRoom(room);
   });
 
-  // 15. DISCONNECT
+  // 15. WEBRTC WIRELESS MIC SIGNALING
+  socket.on('webrtc:offer', ({ offer, nickname }) => {
+    const room = getRoom(socket.data.roomCode);
+    if (!room || !room.displaySocketId) return;
+    io.to(room.displaySocketId).emit('webrtc:offer', {
+      offer,
+      senderSocketId: socket.id,
+      nickname: socket.data.nickname || nickname || 'นักร้อง'
+    });
+  });
+
+  socket.on('webrtc:answer', ({ answer, targetSocketId }) => {
+    io.to(targetSocketId).emit('webrtc:answer', {
+      answer,
+      senderSocketId: socket.id
+    });
+  });
+
+  socket.on('webrtc:ice_candidate', ({ candidate, targetSocketId }) => {
+    io.to(targetSocketId).emit('webrtc:ice_candidate', {
+      candidate,
+      senderSocketId: socket.id
+    });
+  });
+
+  socket.on('mic:stop', () => {
+    const room = getRoom(socket.data.roomCode);
+    if (!room || !room.displaySocketId) return;
+    io.to(room.displaySocketId).emit('mic:stop', {
+      senderSocketId: socket.id
+    });
+    broadcastRoomUpdate(room.code, 'mic:user_stopped', {
+      socketId: socket.id,
+      nickname: socket.data.nickname
+    });
+  });
+
+  socket.on('mic:control', (data) => {
+    const room = getRoom(socket.data.roomCode);
+    if (!room || !room.displaySocketId) return;
+    io.to(room.displaySocketId).emit('mic:control', {
+      senderSocketId: socket.id,
+      volume: data.volume,
+      echoEnabled: data.echoEnabled
+    });
+  });
+
+  // 16. DISCONNECT
   socket.on('disconnect', () => {
     if (socket.data.roomCode) {
       const room = getRoom(socket.data.roomCode);
       if (room) {
+        if (room.displaySocketId) {
+          io.to(room.displaySocketId).emit('mic:stop', { senderSocketId: socket.id });
+        }
         room.users.delete(socket.id);
         if (room.hostSocketId === socket.id) {
           // If host disconnected, promote first remaining user to host or wait

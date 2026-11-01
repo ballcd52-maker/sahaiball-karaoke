@@ -186,6 +186,61 @@
             </button>
           </div>
 
+          <!-- WebRTC Smartphone Wireless Microphone Card -->
+          <div class="vocal-card wireless-mic-card" id="wirelessMicCard">
+            <div class="mic-card-header">
+              <div class="mic-header-title">
+                <span class="icon">🎙️</span>
+                <h3>ไมค์ลอยไร้สาย (Smartphone Mic)</h3>
+              </div>
+              <span class="mic-status-pill" id="micStatusPill">⚪ ปิดไมค์อยู่</span>
+            </div>
+            <p class="card-desc">ร้องใส่ไมค์มือถือ (รูก้นชาร์จ) เสียงจะส่งตรงไปดังออกลำโพงทีวีทันที!</p>
+
+            <!-- Big Live Mic Toggle Button -->
+            <div class="mic-toggle-wrapper">
+              <button id="toggleMicBtn" class="big-mic-btn" type="button">
+                <div class="mic-btn-rings">
+                  <div class="mic-ring-1"></div>
+                  <div class="mic-ring-2"></div>
+                </div>
+                <div class="mic-icon-circle">
+                  <span id="micIconGraphic">🎙️</span>
+                </div>
+                <div class="mic-btn-label" id="micBtnLabel">แตะเพื่อเปิดไมค์</div>
+                <div class="mic-btn-sub" id="micBtnSub">ถือร้องแบบไมค์ลอยได้เลย</div>
+              </button>
+            </div>
+
+            <!-- Real-time Voice VU Meter -->
+            <div class="vu-meter-box" id="vuMeterBox" style="display:none;">
+              <div class="vu-label">
+                <span>🔊 ระดับสัญญาณเสียงไมค์:</span>
+                <span id="vuLevelVal">0%</span>
+              </div>
+              <div class="vu-track">
+                <div class="vu-fill" id="vuFill"></div>
+              </div>
+            </div>
+
+            <!-- Mic Audio Controls -->
+            <div class="mic-settings-row">
+              <div class="mic-param">
+                <div class="mic-slider-label">
+                  <span>🔊 ความดังไมค์บนทีวี:</span>
+                  <strong id="micVolVal">120%</strong>
+                </div>
+                <input type="range" id="micVolSlider" min="20" max="200" value="120" class="custom-slider">
+              </div>
+              <div class="mic-param-toggle">
+                <label class="cyber-switch-label">
+                  <input type="checkbox" id="micEchoToggle" checked>
+                  <span>✨ เอคโค่เสียงก้องคอนเสิร์ต (Reverb/Echo)</span>
+                </label>
+              </div>
+            </div>
+          </div>
+
           <!-- Volume Controls (Music & SFX Independent) -->
           <div class="volume-card">
             <div class="volume-label">

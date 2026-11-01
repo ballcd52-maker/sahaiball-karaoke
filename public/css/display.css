@@ -1024,6 +1024,82 @@ body, html {
   50% { opacity: 1; transform: scale(1.05); }
 }
 
+/* Live Wireless Microphones Active HUD */
+.live-mics-hud {
+  position: absolute;
+  top: 85px;
+  right: 25px;
+  z-index: 15;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.live-mic-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(15, 12, 32, 0.92);
+  border: 1.5px solid #10b981;
+  border-radius: 30px;
+  padding: 5px 14px;
+  box-shadow: 0 0 20px rgba(16, 185, 129, 0.4), 0 8px 20px rgba(0, 0, 0, 0.6);
+  animation: micPillPulse 2s infinite ease-in-out;
+}
+
+@keyframes micPillPulse {
+  0%, 100% { border-color: #10b981; box-shadow: 0 0 15px rgba(16, 185, 129, 0.4); }
+  50% { border-color: #34d399; box-shadow: 0 0 25px rgba(52, 211, 153, 0.7); }
+}
+
+.live-mic-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #fff;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.live-mic-info .mic-icon {
+  font-size: 1.1rem;
+}
+
+.live-mic-info .live-tag {
+  background: #ef4444;
+  color: #fff;
+  font-size: 0.65rem;
+  font-weight: 800;
+  padding: 2px 6px;
+  border-radius: 6px;
+  letter-spacing: 1px;
+}
+
+.mic-wave-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 16px;
+}
+
+.mic-wave-bars span {
+  width: 3px;
+  background: #10b981;
+  border-radius: 2px;
+  animation: waveBarBounce 0.8s ease-in-out infinite alternate;
+}
+
+.mic-wave-bars span:nth-child(1) { height: 6px; animation-delay: 0.1s; }
+.mic-wave-bars span:nth-child(2) { height: 15px; animation-delay: 0.25s; }
+.mic-wave-bars span:nth-child(3) { height: 10px; animation-delay: 0.15s; }
+.mic-wave-bars span:nth-child(4) { height: 16px; animation-delay: 0.35s; }
+
+@keyframes waveBarBounce {
+  0% { transform: scaleY(0.3); }
+  100% { transform: scaleY(1); }
+}
+
 /* ==========================================================================
    Comprehensive Responsive Layout (Smart TV, PC, Tablet, LDPlayer, Mobile)
    ========================================================================== */

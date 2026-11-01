@@ -921,3 +921,250 @@ function escapeHtml(str) {
   if (!str) return '';
   return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
 }
+
+// =============================================================================
+// WebRTC Smartphone Wireless Microphone (Mobile Client Transmitter)
+// =============================================================================
+let micStream = null;
+let micPeerConnection = null;
+let isMicActive = false;
+let micAudioContext = null;
+let micAnalyser = null;
+let vuAnimationFrameId = null;
+
+const toggleMicBtn = document.getElementById('toggleMicBtn');
+const micStatusPill = document.getElementById('micStatusPill');
+const micIconGraphic = document.getElementById('micIconGraphic');
+const micBtnLabel = document.getElementById('micBtnLabel');
+const micBtnSub = document.getElementById('micBtnSub');
+const vuMeterBox = document.getElementById('vuMeterBox');
+const vuLevelVal = document.getElementById('vuLevelVal');
+const vuFill = document.getElementById('vuFill');
+const micVolSlider = document.getElementById('micVolSlider');
+const micVolVal = document.getElementById('micVolVal');
+const micEchoToggle = document.getElementById('micEchoToggle');
+
+if (toggleMicBtn) {
+  toggleMicBtn.addEventListener('click', async () => {
+    if (isMicActive) {
+      stopMicStreaming();
+    } else {
+      await startMicStreaming();
+    }
+  });
+}
+
+async function startMicStreaming() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    showToast('⚠️ เบราว์เซอร์ของคุณไม่รองรับการเปิดไมค์ WebRTC');
+    return;
+  }
+
+  try {
+    if (micStatusPill) micStatusPill.textContent = '🟡 กำลังเชื่อมต่อ...';
+    if (micBtnLabel) micBtnLabel.textContent = 'กำลังเชื่อมต่อ...';
+
+    // 1. Capture microphone audio (Optimized for singing dynamics)
+    micStream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: true, // Prevents feedback loop from room speakers
+        noiseSuppression: false, // Keep vibrato & vocal dynamics intact
+        autoGainControl: true,
+        channelCount: 1,
+        sampleRate: 48000
+      },
+      video: false
+    });
+
+    // 2. Initialize RTCPeerConnection
+    micPeerConnection = new RTCPeerConnection({
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' }
+      ]
+    });
+
+    micStream.getAudioTracks().forEach(track => {
+      micPeerConnection.addTrack(track, micStream);
+    });
+
+    micPeerConnection.onicecandidate = (e) => {
+      if (e.candidate) {
+        socket.emit('webrtc:ice_candidate', {
+          candidate: e.candidate,
+          targetSocketId: null // Server routes to room.displaySocketId
+        });
+      }
+    };
+
+    micPeerConnection.onconnectionstatechange = () => {
+      console.log('WebRTC Mic state:', micPeerConnection.connectionState);
+      if (micPeerConnection.connectionState === 'connected') {
+        if (micStatusPill) {
+          micStatusPill.textContent = '🟢 ไมค์สด (ออนไลน์)';
+          micStatusPill.classList.add('active');
+        }
+        showToast('🎙️ ไมค์เปิดแล้ว! พูดหรือร้องใส่รูก้นมือถือได้เลย');
+      } else if (micPeerConnection.connectionState === 'disconnected' || micPeerConnection.connectionState === 'failed') {
+        stopMicStreaming();
+      }
+    };
+
+    // 3. Create Offer
+    const offer = await micPeerConnection.createOffer({
+      offerToReceiveAudio: false,
+      offerToReceiveVideo: false
+    });
+    await micPeerConnection.setLocalDescription(offer);
+
+    socket.emit('webrtc:offer', {
+      offer,
+      nickname: myNickname || 'นักร้อง'
+    });
+
+    // 4. Start local VU Meter
+    startLocalVuMeter(micStream);
+
+    // 5. Update UI
+    isMicActive = true;
+    if (toggleMicBtn) toggleMicBtn.classList.add('active');
+    if (micIconGraphic) micIconGraphic.textContent = '🔴';
+    if (micBtnLabel) micBtnLabel.textContent = 'แตะเพื่อปิดไมค์';
+    if (micBtnSub) micBtnSub.textContent = 'กำลังส่งเสียงออกลำโพงทีวี';
+    if (vuMeterBox) vuMeterBox.style.display = 'block';
+
+  } catch (err) {
+    console.error('Failed to start microphone:', err);
+    stopMicStreaming();
+    if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+      showToast('⚠️ กรุณากดยอมรับให้เบราว์เซอร์เข้าถึงไมโครโฟน');
+    } else {
+      showToast(`⚠️ ไม่สามารถเปิดไมค์ได้: ${err.message || err.name}`);
+    }
+  }
+}
+
+function stopMicStreaming() {
+  isMicActive = false;
+
+  if (micPeerConnection) {
+    try {
+      micPeerConnection.close();
+    } catch (e) {}
+    micPeerConnection = null;
+  }
+
+  if (micStream) {
+    micStream.getTracks().forEach(track => track.stop());
+    micStream = null;
+  }
+
+  stopLocalVuMeter();
+
+  socket.emit('mic:stop');
+
+  // Update UI
+  if (toggleMicBtn) {
+    toggleMicBtn.classList.remove('active');
+    if (micIconGraphic) micIconGraphic.textContent = '🎙️';
+    if (micBtnLabel) micBtnLabel.textContent = 'แตะเพื่อเปิดไมค์';
+    if (micBtnSub) micBtnSub.textContent = 'ถือร้องแบบไมค์ลอยได้เลย';
+  }
+  if (micStatusPill) {
+    micStatusPill.textContent = '⚪ ปิดไมค์อยู่';
+    micStatusPill.classList.remove('active');
+  }
+  if (vuMeterBox) {
+    vuMeterBox.style.display = 'none';
+  }
+}
+
+// Receive WebRTC Answer from TV
+socket.on('webrtc:answer', async ({ answer }) => {
+  if (micPeerConnection && answer) {
+    try {
+      await micPeerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+    } catch (err) {
+      console.error('Failed to set remote description on mic:', err);
+    }
+  }
+});
+
+// Receive ICE candidate from TV
+socket.on('webrtc:ice_candidate', async ({ candidate }) => {
+  if (micPeerConnection && candidate) {
+    try {
+      await micPeerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+    } catch (e) {}
+  }
+});
+
+// Real-time Local VU Meter via Web Audio API
+function startLocalVuMeter(stream) {
+  try {
+    micAudioContext = new (window.AudioContext || window.webkitAudioContext)();
+    const source = micAudioContext.createMediaStreamSource(stream);
+    micAnalyser = micAudioContext.createAnalyser();
+    micAnalyser.fftSize = 256;
+    source.connect(micAnalyser);
+
+    const dataArray = new Uint8Array(micAnalyser.frequencyBinCount);
+
+    function updateVu() {
+      if (!isMicActive || !micAnalyser) return;
+      micAnalyser.getByteFrequencyData(dataArray);
+
+      let sum = 0;
+      for (let i = 0; i < dataArray.length; i++) {
+        sum += dataArray[i];
+      }
+      const avg = sum / dataArray.length;
+      const pct = Math.min(100, Math.round((avg / 128) * 100));
+
+      if (vuFill) vuFill.style.width = `${pct}%`;
+      if (vuLevelVal) vuLevelVal.textContent = `${pct}%`;
+
+      vuAnimationFrameId = requestAnimationFrame(updateVu);
+    }
+    updateVu();
+  } catch (e) {
+    console.warn('VU meter initialization error:', e);
+  }
+}
+
+function stopLocalVuMeter() {
+  if (vuAnimationFrameId) {
+    cancelAnimationFrame(vuAnimationFrameId);
+    vuAnimationFrameId = null;
+  }
+  if (micAudioContext) {
+    try {
+      micAudioContext.close();
+    } catch (e) {}
+    micAudioContext = null;
+    micAnalyser = null;
+  }
+  if (vuFill) vuFill.style.width = '0%';
+}
+
+// Volume & Echo Controls
+if (micVolSlider) {
+  micVolSlider.addEventListener('input', () => {
+    const vol = parseInt(micVolSlider.value, 10);
+    if (micVolVal) micVolVal.textContent = `${vol}%`;
+    socket.emit('mic:control', {
+      volume: vol,
+      echoEnabled: micEchoToggle ? micEchoToggle.checked : true
+    });
+  });
+}
+
+if (micEchoToggle) {
+  micEchoToggle.addEventListener('change', () => {
+    socket.emit('mic:control', {
+      volume: micVolSlider ? parseInt(micVolSlider.value, 10) : 120,
+      echoEnabled: micEchoToggle.checked
+    });
+    showToast(micEchoToggle.checked ? '✨ เปิดเอคโค่เสียงก้องคอนเสิร์ต' : '🔇 ปิดเอคโค่ (เสียงแห้งปกติ)');
+  });
+}

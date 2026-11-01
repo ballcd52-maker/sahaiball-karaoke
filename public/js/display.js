@@ -95,6 +95,7 @@ const timeCurrent = document.getElementById('timeCurrent');
 const timeDuration = document.getElementById('timeDuration');
 const danmakuContainer = document.getElementById('danmakuContainer');
 const fullscreenBtn = document.getElementById('fullscreenBtn');
+const liveMicsHud = document.getElementById('liveMicsHud');
 
 // Score Elements
 const scoreScreen = document.getElementById('scoreScreen');
@@ -1096,3 +1097,191 @@ document.addEventListener('keydown', (e) => {
     hideTvPlayOverlay();
   }
 });
+
+// =============================================================================
+// WebRTC Wireless Smartphone Microphones Pipeline (TV Receiver)
+// =============================================================================
+const activeMics = new Map(); // senderSocketId -> { pc, stream, sourceNode, gainNode, wetGain, dryGain, nickname }
+
+function renderLiveMicsHud() {
+  if (!liveMicsHud) return;
+  liveMicsHud.innerHTML = '';
+  if (activeMics.size === 0) return;
+
+  let micIndex = 1;
+  activeMics.forEach((micData, socketId) => {
+    const pill = document.createElement('div');
+    pill.className = 'live-mic-pill';
+    pill.innerHTML = `
+      <div class="live-mic-info">
+        <span class="mic-icon">🎙️</span>
+        <span>ไมค์ ${micIndex}: <strong>${escapeHtml(micData.nickname)}</strong></span>
+        <span class="live-tag">LIVE</span>
+      </div>
+      <div class="mic-wave-bars">
+        <span></span><span></span><span></span><span></span>
+      </div>
+    `;
+    liveMicsHud.appendChild(pill);
+    micIndex++;
+  });
+}
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return str.replace(/[&<>"']/g, m => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  })[m]);
+}
+
+socket.on('webrtc:offer', async ({ offer, senderSocketId, nickname }) => {
+  console.log(`🎙️ Incoming WebRTC Mic offer from ${nickname} (${senderSocketId})`);
+  
+  // Cleanup any old peer connection from this sender
+  if (activeMics.has(senderSocketId)) {
+    closeMicSession(senderSocketId);
+  }
+
+  // Allow up to 2 simultaneous mics (Solo or Duet)
+  if (activeMics.size >= 2) {
+    console.warn('Max 2 simultaneous microphones reached.');
+    return;
+  }
+
+  try {
+    const pc = new RTCPeerConnection({
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' }
+      ]
+    });
+
+    const micEntry = {
+      pc,
+      stream: null,
+      sourceNode: null,
+      gainNode: null,
+      wetGain: null,
+      dryGain: null,
+      nickname: nickname || 'นักร้อง'
+    };
+
+    activeMics.set(senderSocketId, micEntry);
+
+    pc.onicecandidate = (e) => {
+      if (e.candidate) {
+        socket.emit('webrtc:ice_candidate', {
+          candidate: e.candidate,
+          targetSocketId: senderSocketId
+        });
+      }
+    };
+
+    pc.ontrack = (e) => {
+      console.log(`🎙️ Audio track received from ${nickname}!`);
+      const stream = e.streams[0];
+      micEntry.stream = stream;
+
+      const ctx = getAudioContext();
+      if (ctx.state === 'suspended') {
+        ctx.resume();
+      }
+
+      const source = ctx.createMediaStreamSource(stream);
+      const gainNode = ctx.createGain();
+      gainNode.gain.setValueAtTime(1.2, ctx.currentTime);
+
+      // Studio Slapback Reverb & Echo
+      const delay = ctx.createDelay();
+      delay.delayTime.setValueAtTime(0.16, ctx.currentTime); // 160ms
+      const feedback = ctx.createGain();
+      feedback.gain.setValueAtTime(0.26, ctx.currentTime); // 26% decay
+      delay.connect(feedback);
+      feedback.connect(delay);
+
+      const dryGain = ctx.createGain();
+      dryGain.gain.setValueAtTime(0.85, ctx.currentTime);
+      const wetGain = ctx.createGain();
+      wetGain.gain.setValueAtTime(0.35, ctx.currentTime);
+
+      source.connect(dryGain);
+      source.connect(delay);
+      delay.connect(wetGain);
+
+      dryGain.connect(gainNode);
+      wetGain.connect(gainNode);
+
+      // Output directly to TV Speakers / Soundbar
+      gainNode.connect(ctx.destination);
+
+      micEntry.sourceNode = source;
+      micEntry.gainNode = gainNode;
+      micEntry.wetGain = wetGain;
+      micEntry.dryGain = dryGain;
+
+      renderLiveMicsHud();
+      playKtvSFX('cheering');
+    };
+
+    await pc.setRemoteDescription(new RTCSessionDescription(offer));
+    const answer = await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+
+    socket.emit('webrtc:answer', {
+      answer,
+      targetSocketId: senderSocketId
+    });
+
+    renderLiveMicsHud();
+  } catch (err) {
+    console.error('Failed to handle incoming WebRTC offer:', err);
+    closeMicSession(senderSocketId);
+  }
+});
+
+socket.on('webrtc:ice_candidate', async ({ candidate, senderSocketId }) => {
+  const micEntry = activeMics.get(senderSocketId);
+  if (micEntry && micEntry.pc && candidate) {
+    try {
+      await micEntry.pc.addIceCandidate(new RTCIceCandidate(candidate));
+    } catch (e) {
+      console.warn('Error adding ICE candidate:', e);
+    }
+  }
+});
+
+socket.on('mic:stop', ({ senderSocketId }) => {
+  console.log(`🎙️ Mic stopped by sender: ${senderSocketId}`);
+  closeMicSession(senderSocketId);
+});
+
+socket.on('mic:control', ({ senderSocketId, volume, echoEnabled }) => {
+  const micEntry = activeMics.get(senderSocketId);
+  if (!micEntry) return;
+
+  const ctx = getAudioContext();
+  if (volume !== undefined && micEntry.gainNode) {
+    const volFloat = Math.max(0, Math.min(2.0, volume / 100));
+    micEntry.gainNode.gain.setValueAtTime(volFloat, ctx.currentTime);
+  }
+  if (echoEnabled !== undefined && micEntry.wetGain) {
+    micEntry.wetGain.gain.setValueAtTime(echoEnabled ? 0.35 : 0.0, ctx.currentTime);
+  }
+});
+
+function closeMicSession(senderSocketId) {
+  const micEntry = activeMics.get(senderSocketId);
+  if (micEntry) {
+    try {
+      if (micEntry.pc) micEntry.pc.close();
+      if (micEntry.sourceNode) micEntry.sourceNode.disconnect();
+      if (micEntry.gainNode) micEntry.gainNode.disconnect();
+    } catch (e) {}
+    activeMics.delete(senderSocketId);
+    renderLiveMicsHud();
+  }
+}
