@@ -1,6 +1,10 @@
 const socket = io();
 
 // State
+let currentRoomCode = '';
+let isHost = false;
+let allowGuestControls = false;
+let roomUsers = [];
 let myNickname = localStorage.getItem('ktv_nickname') || 'มือถือ ' + Math.floor(Math.random() * 900 + 100);
 let currentSong = null;
 let currentQueue = [];
@@ -16,12 +20,38 @@ let playerState = {
 };
 let searchDebounceTimer = null;
 
-// DOM Elements
+// DOM Elements: Header & Room
+const roomBadgeBtn = document.getElementById('roomBadgeBtn');
+const roomCodeDisplay = document.getElementById('roomCodeDisplay');
+const userAvatarIcon = document.getElementById('userAvatarIcon');
 const userNameDisplay = document.getElementById('userNameDisplay');
 const userBadgeBtn = document.getElementById('userBadgeBtn');
+const shareRemoteBtn = document.getElementById('shareRemoteBtn');
+
+// Modals: Room Join & Details
+const roomJoinModal = document.getElementById('roomJoinModal');
+const roomPinInput = document.getElementById('roomPinInput');
+const joinNicknameInput = document.getElementById('joinNicknameInput');
+const btnJoinRoomSubmit = document.getElementById('btnJoinRoomSubmit');
+const btnCreateRoomSubmit = document.getElementById('btnCreateRoomSubmit');
+
+const roomDetailsModal = document.getElementById('roomDetailsModal');
+const detailsRoomCodeText = document.getElementById('detailsRoomCodeText');
+const detailsShareUrlText = document.getElementById('detailsShareUrlText');
+const btnCopyRoomLink = document.getElementById('btnCopyRoomLink');
+const closeRoomDetailsBtn = document.getElementById('closeRoomDetailsBtn');
+const hostOnlySettingsBox = document.getElementById('hostOnlySettingsBox');
+const allowGuestControlsToggle = document.getElementById('allowGuestControlsToggle');
+const roomMembersList = document.getElementById('roomMembersList');
+const detailsMembersCount = document.getElementById('detailsMembersCount');
+const btnSwitchRoom = document.getElementById('btnSwitchRoom');
+
 const nicknameModal = document.getElementById('nicknameModal');
 const nicknameInput = document.getElementById('nicknameInput');
 const saveNicknameBtn = document.getElementById('saveNicknameBtn');
+const cancelNicknameBtn = document.getElementById('cancelNicknameBtn');
+
+const guestControlNotice = document.getElementById('guestControlNotice');
 
 // Mini Player
 const miniThumb = document.getElementById('miniThumb');
@@ -82,15 +112,14 @@ const msgBtns = document.querySelectorAll('.msg-btn');
 const danmakuInput = document.getElementById('danmakuInput');
 const sendDanmakuBtn = document.getElementById('sendDanmakuBtn');
 
-// Tabs
+// Navigation Tabs
 const navItems = document.querySelectorAll('.nav-item');
 const tabViews = document.querySelectorAll('.tab-view');
 const toastEl = document.getElementById('toast');
 
-// Initialize User
-userNameDisplay.textContent = myNickname;
-
-// Tab Navigation
+// =============================================================================
+// TAB NAVIGATION
+// =============================================================================
 navItems.forEach(item => {
   item.addEventListener('click', () => {
     navItems.forEach(n => n.classList.remove('active'));
@@ -103,27 +132,274 @@ navItems.forEach(item => {
   });
 });
 
+// =============================================================================
+// ROOM JOIN & LIFECYCLE MANAGEMENT
+// =============================================================================
+function showRoomJoinModal(prefilledCode = '') {
+  if (roomPinInput) {
+    roomPinInput.value = prefilledCode || currentRoomCode || '';
+  }
+  if (joinNicknameInput) {
+    joinNicknameInput.value = myNickname || '';
+  }
+  if (roomJoinModal) {
+    roomJoinModal.classList.add('active');
+  }
+}
+
+function hideRoomJoinModal() {
+  if (roomJoinModal) {
+    roomJoinModal.classList.remove('active');
+  }
+}
+
+function joinRoom(roomCode, nickname, hostRequested, createIfMissing = false) {
+  if (!roomCode || !/^\d{4}$/.test(roomCode.trim())) {
+    showToast('⚠️ กรุณาใส่รหัสห้องเป็นตัวเลข 4 หลัก');
+    return;
+  }
+
+  const cleanNick = (nickname || myNickname).trim();
+  myNickname = cleanNick;
+  localStorage.setItem('ktv_nickname', myNickname);
+
+  socket.emit('room:join', {
+    roomCode: roomCode.trim(),
+    nickname: cleanNick,
+    isHost: Boolean(hostRequested),
+    createIfMissing: Boolean(createIfMissing)
+  }, (res) => {
+    if (res && res.success) {
+      currentRoomCode = res.roomCode;
+      isHost = res.isHost;
+      allowGuestControls = Boolean(res.allowGuestControls);
+
+      localStorage.setItem('ktv_room_code', currentRoomCode);
+      localStorage.setItem('ktv_is_host', isHost ? 'true' : 'false');
+
+      // Update URL silently
+      try {
+        const newUrl = `${window.location.pathname}?room=${currentRoomCode}`;
+        window.history.replaceState({ path: newUrl }, '', newUrl);
+      } catch (_) {}
+
+      updateRoomUI();
+      hideRoomJoinModal();
+      showToast(`🎉 เข้าร่วมห้อง #${currentRoomCode} เรียบร้อยแล้ว!`);
+    } else {
+      showToast(res ? res.message || res.error : 'ไม่สามารถเข้าร่วมห้องได้');
+      showRoomJoinModal(roomCode);
+    }
+  });
+}
+
+function updateRoomUI() {
+  if (roomCodeDisplay) {
+    roomCodeDisplay.textContent = currentRoomCode ? `ห้อง: ${currentRoomCode}` : 'เลือกห้อง';
+  }
+  if (userAvatarIcon) {
+    userAvatarIcon.textContent = isHost ? '👑' : '👤';
+  }
+  if (userNameDisplay) {
+    userNameDisplay.textContent = `${myNickname}${isHost ? ' (หัวหน้าห้อง)' : ''}`;
+  }
+  if (detailsRoomCodeText) {
+    detailsRoomCodeText.textContent = `#${currentRoomCode}`;
+  }
+  if (detailsShareUrlText) {
+    detailsShareUrlText.textContent = `${window.location.origin}/remote?room=${currentRoomCode}`;
+  }
+
+  // Permissions in Controls Tab
+  updateControlsPermissionUI();
+}
+
+function canControlPlayback() {
+  return isHost || allowGuestControls;
+}
+
+function updateControlsPermissionUI() {
+  if (guestControlNotice) {
+    guestControlNotice.style.display = canControlPlayback() ? 'none' : 'flex';
+  }
+  if (clearQueueBtn) {
+    clearQueueBtn.style.display = isHost ? 'inline-block' : 'none';
+  }
+  if (hostOnlySettingsBox) {
+    hostOnlySettingsBox.style.display = isHost ? 'block' : 'none';
+  }
+  if (allowGuestControlsToggle) {
+    allowGuestControlsToggle.checked = allowGuestControls;
+  }
+}
+
+// Check room on launch
+const urlParams = new URLSearchParams(window.location.search);
+const urlRoom = urlParams.get('room');
+const savedRoom = localStorage.getItem('ktv_room_code');
+const savedHost = localStorage.getItem('ktv_is_host') === 'true';
+
+if (urlRoom && /^\d{4}$/.test(urlRoom.trim())) {
+  currentRoomCode = urlRoom.trim();
+} else if (savedRoom && /^\d{4}$/.test(savedRoom.trim())) {
+  currentRoomCode = savedRoom.trim();
+}
+
+isHost = savedHost;
+updateRoomUI();
+
+socket.on('connect', () => {
+  if (currentRoomCode) {
+    joinRoom(currentRoomCode, myNickname, isHost, false);
+  } else {
+    showRoomJoinModal();
+  }
+});
+
+// Room Join Buttons
+if (btnJoinRoomSubmit) {
+  btnJoinRoomSubmit.addEventListener('click', () => {
+    const code = roomPinInput.value.trim();
+    const nick = joinNicknameInput.value.trim() || myNickname;
+    const selectedRole = document.querySelector('input[name="joinRoleRadio"]:checked')?.value;
+    const wantHost = selectedRole === 'host';
+    joinRoom(code, nick, wantHost, false);
+  });
+}
+
+if (btnCreateRoomSubmit) {
+  btnCreateRoomSubmit.addEventListener('click', () => {
+    const code = roomPinInput.value.trim();
+    const nick = joinNicknameInput.value.trim() || myNickname;
+    joinRoom(code, nick, true, true);
+  });
+}
+
+// Room Details Modal Events
+if (roomBadgeBtn) {
+  roomBadgeBtn.addEventListener('click', () => {
+    if (!currentRoomCode) {
+      showRoomJoinModal();
+      return;
+    }
+    updateRoomMembersUI();
+    roomDetailsModal.classList.add('active');
+  });
+}
+
+if (closeRoomDetailsBtn) {
+  closeRoomDetailsBtn.addEventListener('click', () => {
+    roomDetailsModal.classList.remove('active');
+  });
+}
+
+if (btnCopyRoomLink) {
+  btnCopyRoomLink.addEventListener('click', async () => {
+    const shareUrl = `${window.location.origin}/remote?room=${currentRoomCode}`;
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      showToast('📋 คัดลอกลิงก์ห้องแล้ว ส่งให้เพื่อนได้เลย!');
+    } catch (_) {
+      showToast(`คัดลอก: ${shareUrl}`);
+    }
+  });
+}
+
+if (btnSwitchRoom) {
+  btnSwitchRoom.addEventListener('click', () => {
+    roomDetailsModal.classList.remove('active');
+    showRoomJoinModal();
+  });
+}
+
+if (allowGuestControlsToggle) {
+  allowGuestControlsToggle.addEventListener('change', (e) => {
+    const allow = e.target.checked;
+    socket.emit('room:toggle_guest_controls', { allow });
+    allowGuestControls = allow;
+    updateControlsPermissionUI();
+    showToast(allow ? '🔓 อนุญาตให้เพื่อนทุกคนข้ามเพลงได้แล้ว' : '🔒 ปิดการควบคุม ให้เฉพาะหัวหน้าห้องคุมได้');
+  });
+}
+
 // Nickname Modal
 userBadgeBtn.addEventListener('click', () => {
   nicknameInput.value = myNickname;
   nicknameModal.classList.add('active');
 });
 
+if (cancelNicknameBtn) {
+  cancelNicknameBtn.addEventListener('click', () => {
+    nicknameModal.classList.remove('active');
+  });
+}
+
 saveNicknameBtn.addEventListener('click', () => {
   const val = nicknameInput.value.trim();
   if (val) {
     myNickname = val;
     localStorage.setItem('ktv_nickname', myNickname);
-    userNameDisplay.textContent = myNickname;
+    userNameDisplay.textContent = `${myNickname}${isHost ? ' (หัวหน้าห้อง)' : ''}`;
+    // Re-join with updated nickname
+    if (currentRoomCode) {
+      socket.emit('room:join', {
+        roomCode: currentRoomCode,
+        nickname: myNickname,
+        isHost
+      });
+    }
     showToast(`เปลี่ยนชื่อเป็น "${myNickname}" แล้ว`);
   }
   nicknameModal.classList.remove('active');
 });
 
+// Update Room Members List
+function updateRoomMembersUI() {
+  if (!roomMembersList) return;
+  detailsMembersCount.textContent = roomUsers.length;
+  roomMembersList.innerHTML = '';
+
+  if (roomUsers.length === 0) {
+    roomMembersList.innerHTML = '<div style="color:#94a3b8; font-size:0.8rem; padding:8px 0;">กำลังโหลดรายชื่อสมาชิก...</div>';
+    return;
+  }
+
+  roomUsers.forEach(u => {
+    const isMe = u.nickname === myNickname;
+    const item = document.createElement('div');
+    item.className = `member-item ${u.isHost ? 'is-host' : ''}`;
+    item.innerHTML = `
+      <div style="display:flex; align-items:center; gap:8px;">
+        <span>${u.isHost ? '👑' : '👤'}</span>
+        <strong>${escapeHtml(u.nickname)}</strong>
+      </div>
+      <div style="display:flex; gap:4px;">
+        ${u.isHost ? '<span class="member-badge host">หัวหน้าห้อง</span>' : ''}
+        ${isMe ? '<span class="member-badge you">คุณ</span>' : ''}
+      </div>
+    `;
+    roomMembersList.appendChild(item);
+  });
+}
+
 // Socket State Listeners
 socket.on('state:sync', (data) => {
+  if (data.roomCode) {
+    currentRoomCode = data.roomCode;
+    isHost = Boolean(data.isHost);
+    allowGuestControls = Boolean(data.allowGuestControls);
+    localStorage.setItem('ktv_room_code', currentRoomCode);
+    localStorage.setItem('ktv_is_host', isHost ? 'true' : 'false');
+    updateRoomUI();
+  }
+
+  if (data.users) {
+    roomUsers = data.users;
+    updateRoomMembersUI();
+  }
+
   currentSong = data.currentSong;
-  currentQueue = data.songQueue;
+  currentQueue = data.songQueue || [];
   if (data.playerState) playerState = data.playerState;
 
   updateMiniPlayer();
@@ -131,8 +407,28 @@ socket.on('state:sync', (data) => {
   updateControlButtons();
 });
 
+socket.on('room:users_update', ({ users }) => {
+  roomUsers = users || [];
+  updateRoomMembersUI();
+});
+
+socket.on('room:settings_update', (settings) => {
+  if (settings.allowGuestControls !== undefined) {
+    allowGuestControls = settings.allowGuestControls;
+    updateControlsPermissionUI();
+    showToast(allowGuestControls ? '🔓 หัวหน้าห้องเปิดให้ทุกคนควบคุมเพลงได้' : '🔒 หัวหน้าห้องปิดการควบคุมเพลงร่วม');
+  }
+});
+
+socket.on('room:promoted_to_host', () => {
+  isHost = true;
+  localStorage.setItem('ktv_is_host', 'true');
+  updateRoomUI();
+  showToast('👑 คุณได้รับการแต่งตั้งเป็นหัวหน้าห้องแล้ว!');
+});
+
 socket.on('queue:update', ({ songQueue, currentSong: cur }) => {
-  currentQueue = songQueue;
+  currentQueue = songQueue || [];
   currentSong = cur;
   updateMiniPlayer();
   updateQueueUI();
@@ -149,7 +445,7 @@ function updateMiniPlayer() {
   if (currentSong) {
     miniThumb.src = currentSong.thumbnail;
     miniTitle.textContent = currentSong.title;
-    miniRequester.textContent = `ขอโดย: ${currentSong.requester || 'มือถือ'}`;
+    miniRequester.textContent = `ขอโดย: ${currentSong.requester || 'เพื่อนร่วมห้อง'}`;
     miniStatus.textContent = playerState.isPlaying ? 'กำลังเล่นบนจอทีวี 🎵' : 'หยุดชั่วคราว ⏸';
   } else {
     miniThumb.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='60' viewBox='0 0 60 60'%3E%3Crect width='60' height='60' fill='%231e1b4b'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-size='24' fill='%23a855f7'%3E🎤%3C/text%3E%3C/svg%3E";
@@ -158,126 +454,59 @@ function updateMiniPlayer() {
     miniStatus.textContent = 'กำลังรอเพลงในคิว...';
     miniProgressBar.style.width = '0%';
   }
-
-  // Progress Bar
-  if (playerState.duration > 0) {
-    const pct = (playerState.currentTime / playerState.duration) * 100;
-    miniProgressBar.style.width = `${pct}%`;
-  }
-
-  miniPlayBtn.textContent = playerState.isPlaying ? '⏸' : '▶';
 }
 
+// Update Control Buttons in Tab
 function updateControlButtons() {
   if (playerState.isPlaying) {
     ctrlPlayIcon.textContent = '⏸';
     ctrlPlayText.textContent = 'หยุดชั่วคราว';
+    ctrlPlayPauseBtn.classList.remove('primary');
+    ctrlPlayPauseBtn.classList.add('secondary');
   } else {
     ctrlPlayIcon.textContent = '▶';
     ctrlPlayText.textContent = 'เล่นต่อ';
+    ctrlPlayPauseBtn.classList.remove('secondary');
+    ctrlPlayPauseBtn.classList.add('primary');
   }
 
-  // Volumes
   volumeSlider.value = playerState.volume;
   volumeVal.textContent = `${playerState.volume}%`;
+  sfxVolumeSlider.value = playerState.sfxVolume || 100;
+  sfxVolumeVal.textContent = `${playerState.sfxVolume || 100}%`;
 
-  if (sfxVolumeSlider) {
-    sfxVolumeSlider.value = playerState.sfxVolume || 100;
-    sfxVolumeVal.textContent = `${playerState.sfxVolume || 100}%`;
+  const boostToggle = document.getElementById('boostToggle');
+  if (boostToggle && playerState.isBoosted !== undefined) {
+    boostToggle.checked = Boolean(playerState.isBoosted);
   }
 
-  // Key Control Display
-  const key = playerState.keyShift || 0;
-  keyDisplayVal.textContent = key > 0 ? `+${key}` : key;
-  if (key === 0) {
+  keyDisplayVal.textContent = playerState.keyShift > 0 ? `+${playerState.keyShift}` : playerState.keyShift;
+  if (playerState.keyShift === 0) {
     keyDescText.textContent = 'คีย์ปกติ (Original)';
-    keyDisplayVal.style.color = '#38bdf8';
-  } else if (key > 0) {
-    keyDescText.textContent = 'คีย์สูงขึ้น (เหมาะสำหรับผู้หญิง)';
-    keyDisplayVal.style.color = '#ec4899';
+  } else if (playerState.keyShift > 0) {
+    keyDescText.textContent = `สูงขึ้น ${playerState.keyShift} คีย์`;
   } else {
-    keyDescText.textContent = 'คีย์ต่ำลง (เหมาะสำหรับผู้ชาย)';
-    keyDisplayVal.style.color = '#38bdf8';
+    keyDescText.textContent = `ต่ำลง ${Math.abs(playerState.keyShift)} คีย์`;
   }
 
-  // Speed Control Display
-  const curSpeed = playerState.speed || 1.0;
-  speedBtns.forEach(b => {
-    if (parseFloat(b.dataset.speed) === curSpeed) {
-      b.classList.add('active');
+  speedBtns.forEach(btn => {
+    const spd = parseFloat(btn.dataset.speed);
+    if (spd === (playerState.speed || 1.0)) {
+      btn.classList.add('active');
     } else {
-      b.classList.remove('active');
+      btn.classList.remove('active');
     }
   });
 
-  // Vocal Cut Button Display
   if (playerState.isVocalCut) {
     vocalCutBtn.classList.add('active');
-    vocalCutTitle.textContent = '✅ ตัดเสียงร้องอยู่ (เปิดเสียงร้อง)';
-    vocalCutDesc.textContent = 'คลิกเพื่อสลับกลับเป็นเสียงร้องปกติ (Stereo)';
+    vocalCutTitle.textContent = 'คืนค่าเสียงร้องปกติ (Stereo)';
+    vocalCutDesc.textContent = 'กำลังเปิดโหมดตัดเสียงร้องอยู่ แตะเพื่อปิด';
   } else {
     vocalCutBtn.classList.remove('active');
-    vocalCutTitle.textContent = '✂️ ตัดเสียงร้อง (Vocal Suppression)';
+    vocalCutTitle.textContent = 'ตัดเสียงร้อง (Vocal Suppression)';
     vocalCutDesc.textContent = 'ลดเสียงร้องแชนเนลตรงกลาง / สเตอริโอ';
   }
-
-  // Boost Toggle Display
-  const boostToggleEl = document.getElementById('boostToggle');
-  if (boostToggleEl && playerState.isBoosted !== undefined) {
-    boostToggleEl.checked = Boolean(playerState.isBoosted);
-  }
-}
-
-// Key Control Handlers (-4 to +4)
-keyMinusBtn.addEventListener('click', () => {
-  let cur = playerState.keyShift || 0;
-  if (cur > -4) {
-    cur--;
-    socket.emit('player:control', { action: 'key', value: cur });
-    showToast(`ลดคีย์เพลงเป็น ${cur}`);
-  }
-});
-
-keyPlusBtn.addEventListener('click', () => {
-  let cur = playerState.keyShift || 0;
-  if (cur < 4) {
-    cur++;
-    socket.emit('player:control', { action: 'key', value: cur });
-    showToast(`เพิ่มคีย์เพลงเป็น +${cur}`);
-  }
-});
-
-keyResetBtn.addEventListener('click', () => {
-  socket.emit('player:control', { action: 'key', value: 0 });
-  showToast('รีเซ็ตคีย์เพลงกลับเป็นปกติ (Key 0)');
-});
-
-// Speed Control Handlers
-speedBtns.forEach(btn => {
-  btn.addEventListener('click', () => {
-    const spd = parseFloat(btn.dataset.speed);
-    socket.emit('player:control', { action: 'speed', value: spd });
-    showToast(`ปรับความเร็วเพลงเป็น ${spd}x`);
-  });
-});
-
-// Soundboard / Party Jingles
-sfxBtns.forEach(btn => {
-  btn.addEventListener('click', () => {
-    const type = btn.dataset.sfx;
-    socket.emit('sfx:play', { type, sender: myNickname });
-    const name = btn.querySelector('strong').textContent;
-    showToast(`🔊 ส่งเสียง "${name}" ออกลำโพงทีวีแล้ว!`);
-  });
-});
-
-// Independent SFX Volume
-if (sfxVolumeSlider) {
-  sfxVolumeSlider.addEventListener('input', (e) => {
-    const val = e.target.value;
-    sfxVolumeVal.textContent = `${val}%`;
-    socket.emit('player:control', { action: 'sfx_volume', value: val });
-  });
 }
 
 // Queue Rendering
@@ -297,6 +526,9 @@ function updateQueueUI() {
   queueList.innerHTML = '';
 
   currentQueue.forEach((item, index) => {
+    const isMySong = item.requester === myNickname;
+    const canManageThis = isHost || isMySong;
+
     const el = document.createElement('div');
     el.className = 'queue-item';
     el.innerHTML = `
@@ -304,12 +536,12 @@ function updateQueueUI() {
       <img src="${item.thumbnail}" alt="Thumbnail">
       <div class="queue-item-meta">
         <div class="queue-item-title">${escapeHtml(item.title)}</div>
-        <div class="queue-item-sub">👤 ${escapeHtml(item.requester)} • ${item.duration}</div>
+        <div class="queue-item-sub">👤 ${escapeHtml(item.requester)} ${isMySong ? '<span style="color:#38bdf8; font-weight:600;">(เพลงของคุณ)</span>' : ''} • ${item.duration}</div>
       </div>
       <div class="queue-actions">
-        ${index > 0 ? `<button class="sm-btn" onclick="moveQueueItem('${item.id}', 'up')" title="เลื่อนขึ้น">▲</button>` : ''}
-        ${index < count - 1 ? `<button class="sm-btn" onclick="moveQueueItem('${item.id}', 'down')" title="เลื่อนลง">▼</button>` : ''}
-        <button class="sm-btn danger" onclick="removeQueueItem('${item.id}')" title="ลบออกจากคิว">✕</button>
+        ${isHost && index > 0 ? `<button class="sm-btn" onclick="moveQueueItem('${item.id}', 'up')" title="เลื่อนขึ้น">▲</button>` : ''}
+        ${isHost && index < count - 1 ? `<button class="sm-btn" onclick="moveQueueItem('${item.id}', 'down')" title="เลื่อนลง">▼</button>` : ''}
+        ${canManageThis ? `<button class="sm-btn danger" onclick="removeQueueItem('${item.id}')" title="ลบเพลงนี้">✕</button>` : ''}
       </div>
     `;
     queueList.appendChild(el);
@@ -317,6 +549,10 @@ function updateQueueUI() {
 }
 
 window.moveQueueItem = function(songId, direction) {
+  if (!isHost) {
+    showToast('👑 เฉพาะหัวหน้าห้องเท่านั้นที่สามารถจัดลำดับคิวได้');
+    return;
+  }
   socket.emit('queue:move', { songId, direction });
 };
 
@@ -326,6 +562,10 @@ window.removeQueueItem = function(songId) {
 };
 
 clearQueueBtn.addEventListener('click', () => {
+  if (!isHost) {
+    showToast('👑 เฉพาะหัวหน้าห้องเท่านั้นที่สามารถล้างคิวทั้งหมดได้');
+    return;
+  }
   if (confirm('คุณต้องการล้างคิวเพลงทั้งหมดหรือไม่?')) {
     socket.emit('queue:clear');
     showToast('ล้างคิวเพลงทั้งหมดแล้ว');
@@ -344,336 +584,75 @@ searchInput.addEventListener('input', () => {
   searchDebounceTimer = setTimeout(() => executeSearch(q), 400);
 });
 
-// Share Remote Link
-const shareRemoteBtn = document.getElementById('shareRemoteBtn');
-if (shareRemoteBtn) {
-  shareRemoteBtn.addEventListener('click', async () => {
-    const shareUrl = window.location.href;
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: 'SahaiBall Karaoke Remote',
-          text: 'มาร้องเพลงกัน! เปิดรีโมตสั่งเพลงคาราโอเกะผ่านมือถือได้เลย 🎤',
-          url: shareUrl
-        });
-        return;
-      } catch (err) {}
-    }
-    if (navigator.clipboard) {
-      await navigator.clipboard.writeText(shareUrl);
-      showToast('📋 คัดลอกลิงก์รีโมตแล้ว! นำไปส่งใน LINE ให้เพื่อนได้เลย 🚀');
-    } else {
-      prompt('คัดลอกลิงก์รีโมตนี้ไปส่งให้เพื่อน:', shareUrl);
-    }
-  });
-}
-
-// Lucky Song Catalog & Lucky Draw Button
-const luckySongCatalog = [
-  'คุกเข่า COCKTAIL', 'คิดแต่ไม่ถึง Tilly Birds', 'วัดปะหล่ะ 4EVE', 'ซ่อนกลิ่น Palmy',
-  'น้ำลาย Silly Fools', 'แสงสุดท้าย Bodyslam', 'โต๊ะริม NONT TANONT', 'ทรงอย่างแบด Paper Planes',
-  'สลักจิต ป๊อบ ปองกูล', 'สองรัก Zeal', 'ขี้หึง Silly Fools', 'ฤดูร้อน Paradox',
-  'ไกลแค่ไหนคือใกล้ Getsunova', 'เสแสร้ง Paper Planes', 'นะหน้าทอง โจอี้ ภูวศิษฐ์',
-  'วาดไว้ BOWKYLION', 'เชือกวิเศษ LABANOON', 'ใจสั่งมา เสก โลโซ', 'แฟนเก่าคนโปรด Slapkiss',
-  'Bohemian Rhapsody Queen', 'Until I Found You Stephen Sanchez', 'Perfect Ed Sheeran'
-];
-
-const luckyDrawBtn = document.getElementById('luckyDrawBtn');
-if (luckyDrawBtn) {
-  luckyDrawBtn.addEventListener('click', () => {
-    luckyDrawBtn.style.transform = 'scale(0.96)';
-    setTimeout(() => luckyDrawBtn.style.transform = '', 150);
-
-    const randomIndex = Math.floor(Math.random() * luckySongCatalog.length);
-    const chosenSong = luckySongCatalog[randomIndex];
-
-    searchInput.value = chosenSong;
-    showToast(`🎲 สุ่มได้เพลง "${chosenSong}"! ✨`);
-    executeSearch(chosenSong);
-  });
-}
-
-// Favorites Storage System
-function getFavorites() {
-  try {
-    return JSON.parse(localStorage.getItem('ktv_favorites') || '[]');
-  } catch (e) {
-    return [];
-  }
-}
-
-function saveFavorites(favs) {
-  localStorage.setItem('ktv_favorites', JSON.stringify(favs));
-  updateFavCount();
-}
-
-function updateFavCount() {
-  const badge = document.getElementById('favCountBadge');
-  if (badge) {
-    badge.textContent = getFavorites().length;
-  }
-}
-updateFavCount();
-
-window.toggleFavorite = function(video) {
-  let favs = getFavorites();
-  const existsIndex = favs.findIndex(f => f.videoId === video.videoId);
-  if (existsIndex >= 0) {
-    favs.splice(existsIndex, 1);
-    saveFavorites(favs);
-    showToast(`💔 นำออกจากเพลงโปรดแล้ว`);
-  } else {
-    favs.unshift(video);
-    saveFavorites(favs);
-    showToast(`❤️ บันทึก "${video.title}" ในเพลงโปรดแล้ว!`);
-  }
-  updateFavCount();
-  if (currentGenre === 'fav') {
-    renderFavoritesList();
-  } else {
-    const btn = document.querySelector(`.fav-btn[data-id="${video.videoId}"]`);
-    if (btn) btn.classList.toggle('active', existsIndex < 0);
-  }
-};
-
-function renderFavoritesList() {
-  const favs = getFavorites();
-  resultsList.innerHTML = '';
-  searchLoading.style.display = 'none';
-
-  if (favs.length === 0) {
-    searchEmpty.style.display = 'block';
-    searchEmpty.querySelector('h3').textContent = 'ยังไม่มีเพลงโปรด';
-    searchEmpty.querySelector('p').textContent = 'กดไอคอน ❤️ บนเพลงที่ชอบ เพื่อเก็บไว้ร้องคราวหน้าได้สะดวกรวดเร็ว';
-    return;
-  }
-
-  searchEmpty.style.display = 'none';
-  renderSearchResults(favs, true);
-}
-
-// Genre Categories Data
-const genreChipsData = {
-  all: [
-    { label: '🔥 เพลงฮิต', query: 'คาราโอเกะ ฮิต' },
-    { label: 'COCKTAIL', query: 'COCKTAIL คาราโอเกะ' },
-    { label: 'Tilly Birds', query: 'Tilly Birds คาราโอเกะ' },
-    { label: 'Bodyslam', query: 'Bodyslam คาราโอเกะ' },
-    { label: 'Three Man Down', query: 'Three Man Down คาราโอเกะ' },
-    { label: 'ลูกทุ่งฮิต', query: 'ลูกทุ่ง คาราโอเกะ' }
-  ],
-  rock: [
-    { label: '🎸 Bodyslam', query: 'Bodyslam คาราโอเกะ' },
-    { label: '🎸 Silly Fools', query: 'Silly Fools คาราโอเกะ' },
-    { label: '🎸 Paradox', query: 'Paradox คาราโอเกะ' },
-    { label: '🎸 LABANOON', query: 'LABANOON คาราโอเกะ' },
-    { label: '🎸 Retrospect', query: 'Retrospect คาราโอเกะ' }
-  ],
-  sad: [
-    { label: '💔 เพลงอกหักโดนๆ', query: 'เพลงอกหัก คาราโอเกะ' },
-    { label: '💔 Slapkiss', query: 'Slapkiss คาราโอเกะ' },
-    { label: '💔 BOWKYLION', query: 'BOWKYLION คาราโอเกะ' },
-    { label: '💔 Three Man Down', query: 'Three Man Down คาราโอเกะ' },
-    { label: '💔 Tilly Birds', query: 'Tilly Birds คาราโอเกะ' }
-  ],
-  '90s': [
-    { label: '📼 ฮิตยุค 90s', query: 'เพลงยุค 90 คาราโอเกะ' },
-    { label: '📼 เสก โลโซ', query: 'เสก โลโซ คาราโอเกะ' },
-    { label: '📼 โมเดิร์นด็อก', query: 'Moderndog คาราโอเกะ' },
-    { label: '📼 พลพล', query: 'พลพล คาราโอเกะ' },
-    { label: '📼 อัสนี วสันต์', query: 'อัสนี วสันต์ คาราโอเกะ' }
-  ],
-  country: [
-    { label: '🌾 ลูกทุ่งฮิตติดลม', query: 'ลูกทุ่งฮิต คาราโอเกะ' },
-    { label: '🌾 โจอี้ ภูวศิษฐ์', query: 'โจอี้ ภูวศิษฐ์ คาราโอเกะ' },
-    { label: '🌾 ไผ่ พงศธร', query: 'ไผ่ พงศธร คาราโอเกะ' },
-    { label: '🌾 มนต์แคน แก่นคูน', query: 'มนต์แคน แก่นคูน คาราโอเกะ' },
-    { label: '🌾 ลำไย ไหทองคำ', query: 'ลำไย ไหทองคำ คาราโอเกะ' }
-  ],
-  inter: [
-    { label: '🌍 Billboard Hits', query: 'Top Billboard Hits Karaoke' },
-    { label: '🌍 Ed Sheeran', query: 'Ed Sheeran Karaoke' },
-    { label: '🌍 Bruno Mars', query: 'Bruno Mars Karaoke' },
-    { label: '🌍 Maroon 5', query: 'Maroon 5 Karaoke' },
-    { label: '🌍 Taylor Swift', query: 'Taylor Swift Karaoke' }
-  ],
-  dance: [
-    { label: '💃 แดนซ์สายตื๊ด', query: 'เพลงแดนซ์ คาราโอเกะ' },
-    { label: '💃 4EVE', query: '4EVE คาราโอเกะ' },
-    { label: '💃 PROXIE', query: 'PROXIE คาราโอเกะ' },
-    { label: '💃 สามช่าโจ๊ะๆ', query: 'สามช่า คาราโอเกะ' }
-  ]
-};
-
-let currentGenre = 'all';
-const genreCategoryBar = document.getElementById('genreCategoryBar');
-if (genreCategoryBar) {
-  genreCategoryBar.querySelectorAll('.genre-pill').forEach(pill => {
-    pill.addEventListener('click', () => {
-      genreCategoryBar.querySelectorAll('.genre-pill').forEach(p => p.classList.remove('active'));
-      pill.classList.add('active');
-      currentGenre = pill.dataset.genre;
-
-      if (currentGenre === 'fav') {
-        renderFavoritesList();
-      } else {
-        renderGenreChips(currentGenre);
-      }
-    });
-  });
-}
-
-function renderGenreChips(genre) {
-  if (!quickChipsContainer) return;
-  if (genre === 'all') {
-    renderQuickChips(searchMode);
-    return;
-  }
-  const chips = genreChipsData[genre] || [];
-  quickChipsContainer.innerHTML = chips.map(item => `
-    <button class="chip" data-query="${escapeHtml(item.query)}">${escapeHtml(item.label)}</button>
-  `).join('');
-
-  quickChipsContainer.querySelectorAll('.chip').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const q = btn.dataset.query;
-      searchInput.value = q;
-      executeSearch(q);
-    });
-  });
-}
-
-// Audio Boost Toggle Switch in Controls
-const boostToggle = document.getElementById('boostToggle');
-if (boostToggle) {
-  boostToggle.addEventListener('change', (e) => {
-    const isBoost = e.target.checked;
-    socket.emit('player:control', { action: 'boost', value: isBoost });
-    showToast(isBoost ? '⚡ เปิด Audio Boost (+20%) แล้ว!' : 'ปิด Audio Boost');
-  });
-}
-
 searchClearBtn.addEventListener('click', () => {
   searchInput.value = '';
   resultsList.innerHTML = '';
   searchEmpty.style.display = 'block';
-  searchInput.focus();
 });
 
-const karaokeChips = [
-  { label: '🔥 คาราโอเกะฮิต', query: 'คาราโอเกะ ฮิต' },
-  { label: 'COCKTAIL', query: 'COCKTAIL คาราโอเกะ' },
-  { label: 'Tilly Birds', query: 'Tilly Birds คาราโอเกะ' },
-  { label: 'Bodyslam', query: 'Bodyslam คาราโอเกะ' },
-  { label: 'Three Man Down', query: 'Three Man Down คาราโอเกะ' },
-  { label: 'ลูกทุ่งฮิต', query: 'ลูกทุ่ง คาราโอเกะ' }
-];
-
-const mvChips = [
-  { label: '🔥 เพลงฮิตติดชาร์ต', query: 'เพลงไทยฮิตติดชาร์ต' },
-  { label: '🎬 Official MV', query: 'Official MV เพลงฮิต' },
-  { label: 'COCKTAIL MV', query: 'COCKTAIL Official MV' },
-  { label: 'Tilly Birds MV', query: 'Tilly Birds Official MV' },
-  { label: 'Bodyslam MV', query: 'Bodyslam Official MV' },
-  { label: 'เพลงสากลฮิต', query: 'Top Billboard Hits' }
-];
-
-function renderQuickChips(mode) {
-  if (!quickChipsContainer) return;
-  const list = mode === 'mv' ? mvChips : karaokeChips;
-  quickChipsContainer.innerHTML = list.map(item => `
-    <button class="chip" data-query="${escapeHtml(item.query)}">${escapeHtml(item.label)}</button>
-  `).join('');
-
-  quickChipsContainer.querySelectorAll('.chip').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const q = btn.dataset.query;
-      searchInput.value = q;
-      executeSearch(q);
-    });
-  });
-}
-
-function setSearchMode(mode) {
-  searchMode = mode;
-  if (mode === 'karaoke') {
-    if (modeKaraokeBtn) modeKaraokeBtn.classList.add('active');
-    if (modeMvBtn) modeMvBtn.classList.remove('active', 'mv-mode');
-    searchInput.placeholder = 'พิมพ์ชื่อเพลง หรือ ศิลปิน (ตัดเสียงร้อง)...';
-    renderQuickChips('karaoke');
-  } else {
-    if (modeMvBtn) modeMvBtn.classList.add('active', 'mv-mode');
-    if (modeKaraokeBtn) modeKaraokeBtn.classList.remove('active');
-    searchInput.placeholder = 'พิมพ์ชื่อเพลง MV ต้นฉบับ (มีเสียงร้อง)...';
-    renderQuickChips('mv');
-  }
+modeKaraokeBtn.addEventListener('click', () => {
+  searchMode = 'karaoke';
+  modeKaraokeBtn.classList.add('active');
+  modeMvBtn.classList.remove('active');
   const q = searchInput.value.trim();
   if (q) executeSearch(q);
-}
+});
 
-if (modeKaraokeBtn) modeKaraokeBtn.addEventListener('click', () => setSearchMode('karaoke'));
-if (modeMvBtn) modeMvBtn.addEventListener('click', () => setSearchMode('mv'));
-renderQuickChips('karaoke');
+modeMvBtn.addEventListener('click', () => {
+  searchMode = 'mv';
+  modeMvBtn.classList.add('active');
+  modeKaraokeBtn.classList.remove('active');
+  const q = searchInput.value.trim();
+  if (q) executeSearch(q);
+});
+
+quickChipsContainer.addEventListener('click', (e) => {
+  const chip = e.target.closest('.chip');
+  if (chip) {
+    const q = chip.dataset.query;
+    searchInput.value = q;
+    executeSearch(q);
+  }
+});
 
 async function executeSearch(query) {
   if (!query) return;
-
   searchLoading.style.display = 'flex';
   searchEmpty.style.display = 'none';
   resultsList.innerHTML = '';
 
-  const isKaraoke = searchMode === 'karaoke';
-
   try {
+    const isKaraoke = searchMode === 'karaoke';
     const res = await fetch(`/api/search?q=${encodeURIComponent(query)}&karaoke=${isKaraoke}`);
     const data = await res.json();
-
     searchLoading.style.display = 'none';
 
-    if (!data.results || data.results.length === 0) {
-      searchEmpty.style.display = 'block';
-      searchEmpty.querySelector('h3').textContent = 'ไม่พบเพลงที่ค้นหา';
-      searchEmpty.querySelector('p').textContent = 'ลองเปลี่ยนคำค้นหา หรือค้นหาด้วยชื่อศิลปินแทน';
-      return;
+    if (data.results && data.results.length > 0) {
+      renderSearchResults(data.results);
+    } else {
+      resultsList.innerHTML = '<div class="empty-state"><p>ไม่พบเพลงที่ค้นหา ลองพิมพ์ชื่อเพลงอื่นดูนะ</p></div>';
     }
-
-    renderSearchResults(data.results);
   } catch (err) {
     searchLoading.style.display = 'none';
-    searchEmpty.style.display = 'block';
-    searchEmpty.querySelector('h3').textContent = 'เกิดข้อผิดพลาด';
-    searchEmpty.querySelector('p').textContent = 'ไม่สามารถเชื่อมต่อการค้นหาได้ในขณะนี้';
+    showToast('เกิดข้อผิดพลาดในการค้นหา');
   }
 }
 
-function renderSearchResults(videos, isFavView = false) {
+function renderSearchResults(videos) {
   resultsList.innerHTML = '';
-  const isMv = searchMode === 'mv';
-  const favIds = new Set(getFavorites().map(f => f.videoId));
-
   videos.forEach(v => {
-    const isFav = favIds.has(v.videoId);
     const card = document.createElement('div');
     card.className = 'song-card';
-    const tagBadge = isMv 
-      ? '<span style="display:inline-block; font-size:0.75rem; background:rgba(37,99,235,0.25); color:#60a5fa; border:1px solid rgba(59,130,246,0.3); padding:2px 8px; border-radius:12px; margin-bottom:4px; font-weight:600;">🎬 MV มีเสียงร้อง</span>'
-      : '<span style="display:inline-block; font-size:0.75rem; background:rgba(168,85,247,0.25); color:#c084fc; border:1px solid rgba(168,85,247,0.3); padding:2px 8px; border-radius:12px; margin-bottom:4px; font-weight:600;">🎤 คาราโอเกะ</span>';
-
     const safeVideo = JSON.stringify(v).replace(/'/g, "&apos;");
 
     card.innerHTML = `
       <img src="${v.thumbnail}" alt="Thumb" loading="lazy">
       <div class="song-card-info">
-        ${tagBadge}
         <div class="song-card-title">${escapeHtml(v.title)}</div>
-        <div class="song-card-author">${escapeHtml(v.author)}</div>
-        <div class="song-card-duration">⏱️ ${v.duration}</div>
+        <div class="song-card-sub">${escapeHtml(v.author)} • ${v.duration}</div>
       </div>
       <div class="song-card-actions">
-        <div style="display:flex; gap:6px; justify-content: flex-end;">
-          <button class="fav-btn ${isFav ? 'active' : ''}" data-id="${v.videoId}" onclick='toggleFavorite(${safeVideo})' title="บันทึกเพลงโปรด">❤️</button>
-          <button class="priority-btn" onclick='addSongToQueue(${safeVideo}, true)' title="แซงคิวเป็นเพลงถัดไป">⚡ ร้องเลย</button>
-        </div>
+        <button class="priority-btn" onclick='addSongToQueue(${safeVideo}, true)' title="แซงคิวเป็นเพลงถัดไป">⚡ ร้องเลย</button>
         <button class="add-btn" onclick='addSongToQueue(${safeVideo}, false)'>+ ต่อคิว</button>
       </div>
     `;
@@ -682,6 +661,12 @@ function renderSearchResults(videos, isFavView = false) {
 }
 
 window.addSongToQueue = function(video, priority) {
+  if (!currentRoomCode) {
+    showToast('⚠️ กรุณาเข้าร่วมห้องก่อนสั่งเพลง');
+    showRoomJoinModal();
+    return;
+  }
+
   socket.emit('queue:add', {
     videoId: video.videoId,
     title: video.title,
@@ -701,6 +686,10 @@ miniPlayBtn.addEventListener('click', togglePlayPause);
 ctrlPlayPauseBtn.addEventListener('click', togglePlayPause);
 
 function togglePlayPause() {
+  if (!canControlPlayback()) {
+    showToast('👑 เฉพาะหัวหน้าห้องเท่านั้นที่สามารถควบคุมการเล่นได้');
+    return;
+  }
   const action = playerState.isPlaying ? 'pause' : 'play';
   socket.emit('player:control', { action });
 }
@@ -709,34 +698,125 @@ miniSkipBtn.addEventListener('click', skipSong);
 ctrlSkipBtn.addEventListener('click', skipSong);
 
 function skipSong() {
+  if (!canControlPlayback()) {
+    showToast('👑 เฉพาะหัวหน้าห้องเท่านั้นที่สามารถข้ามเพลงได้');
+    return;
+  }
   socket.emit('player:control', { action: 'skip' });
   showToast('⏭ ข้ามไปยังเพลงถัดไป');
 }
 
 ctrlRestartBtn.addEventListener('click', () => {
+  if (!canControlPlayback()) {
+    showToast('👑 เฉพาะหัวหน้าห้องเท่านั้นที่สามารถเริ่มเพลงใหม่ได้');
+    return;
+  }
   socket.emit('player:control', { action: 'restart' });
   showToast('⏮ เริ่มเพลงใหม่ตั้งแต่ต้น');
 });
 
 volumeSlider.addEventListener('input', (e) => {
+  if (!canControlPlayback()) {
+    showToast('👑 เฉพาะหัวหน้าห้องเท่านั้นที่สามารถปรับเสียงได้');
+    return;
+  }
   const val = e.target.value;
   volumeVal.textContent = `${val}%`;
   socket.emit('player:control', { action: 'volume', value: val });
 });
 
+sfxVolumeSlider.addEventListener('input', (e) => {
+  const val = e.target.value;
+  sfxVolumeVal.textContent = `${val}%`;
+  socket.emit('player:control', { action: 'sfx_volume', value: val });
+});
+
+// Volume Boost
+const boostToggle = document.getElementById('boostToggle');
+if (boostToggle) {
+  boostToggle.addEventListener('change', (e) => {
+    if (!canControlPlayback()) {
+      showToast('👑 เฉพาะหัวหน้าห้องเท่านั้นที่สามารถปรับ Audio Boost ได้');
+      e.target.checked = !e.target.checked;
+      return;
+    }
+    const isBoost = e.target.checked;
+    socket.emit('player:control', { action: 'boost', value: isBoost });
+    showToast(isBoost ? '⚡ เปิด Audio Boost (+20%)' : 'ปิด Audio Boost');
+  });
+}
+
+// Key Controls
+keyMinusBtn.addEventListener('click', () => {
+  if (!canControlPlayback()) {
+    showToast('👑 เฉพาะหัวหน้าห้องเท่านั้นที่สามารถปรับคีย์ได้');
+    return;
+  }
+  let cur = playerState.keyShift - 1;
+  if (cur < -6) cur = -6;
+  socket.emit('player:control', { action: 'key', value: cur });
+});
+
+keyPlusBtn.addEventListener('click', () => {
+  if (!canControlPlayback()) {
+    showToast('👑 เฉพาะหัวหน้าห้องเท่านั้นที่สามารถปรับคีย์ได้');
+    return;
+  }
+  let cur = playerState.keyShift + 1;
+  if (cur > 6) cur = 6;
+  socket.emit('player:control', { action: 'key', value: cur });
+});
+
+keyResetBtn.addEventListener('click', () => {
+  if (!canControlPlayback()) {
+    showToast('👑 เฉพาะหัวหน้าห้องเท่านั้นที่สามารถปรับคีย์ได้');
+    return;
+  }
+  socket.emit('player:control', { action: 'key', value: 0 });
+});
+
+// Speed Controls
+speedBtns.forEach(btn => {
+  btn.addEventListener('click', () => {
+    if (!canControlPlayback()) {
+      showToast('👑 เฉพาะหัวหน้าห้องเท่านั้นที่สามารถปรับความเร็วได้');
+      return;
+    }
+    const spd = parseFloat(btn.dataset.speed);
+    socket.emit('player:control', { action: 'speed', value: spd });
+  });
+});
+
 // Vocal Controls
 vocalCutBtn.addEventListener('click', () => {
+  if (!canControlPlayback()) {
+    showToast('👑 เฉพาะหัวหน้าห้องเท่านั้นที่สามารถเปิดตัดเสียงร้องได้');
+    return;
+  }
   socket.emit('player:toggle_vocal', 'toggle');
   showToast(playerState.isVocalCut ? '🔊 คืนค่าเสียงร้องปกติ (Stereo)' : '✂️ เปิดโหมดตัดเสียงร้อง');
 });
 
 vocalSwapBtn.addEventListener('click', () => {
+  if (!canControlPlayback()) {
+    showToast('👑 เฉพาะหัวหน้าห้องเท่านั้นที่สามารถสลับวิดีโอได้');
+    return;
+  }
   if (!currentSong) {
     showToast('ไม่มีเพลงที่กำลังเล่นอยู่');
     return;
   }
   socket.emit('player:toggle_vocal', 'swap_video');
   showToast('⚡ กำลังค้นหาและสลับเป็นเวอร์ชันดนตรีคาราโอเกะ...');
+});
+
+// SFX Soundboard Buttons (Anyone in room can trigger!)
+sfxBtns.forEach(btn => {
+  btn.addEventListener('click', () => {
+    const type = btn.dataset.sfx;
+    socket.emit('sfx:play', { type, sender: myNickname });
+    showToast(`เล่นเสียง ${btn.querySelector('strong')?.textContent || type} 📢`);
+  });
 });
 
 // Reactions / Danmaku
@@ -767,6 +847,30 @@ function sendCustomDanmaku() {
   socket.emit('danmaku:send', { emoji: '💬', text, sender: myNickname });
   danmakuInput.value = '';
   showToast('ส่งข้อความขึ้นจอทีวีแล้ว!');
+}
+
+// Share Remote Link
+if (shareRemoteBtn) {
+  shareRemoteBtn.addEventListener('click', async () => {
+    const shareUrl = `${window.location.origin}/remote?room=${currentRoomCode}`;
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: `SahaiBall Karaoke ห้อง #${currentRoomCode}`,
+          text: `มาร้องเพลงกัน! เข้าห้องคาราโอเกะรหัส ${currentRoomCode} ผ่านมือถือได้เลย 🎤`,
+          url: shareUrl
+        });
+        return;
+      } catch (err) {}
+    }
+    // Fallback copy
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      showToast('📋 คัดลอกลิงก์ห้องเรียบร้อย ส่งให้เพื่อนได้เลย!');
+    } catch (_) {
+      showToast(`ลิงก์ห้อง: ${shareUrl}`);
+    }
+  });
 }
 
 // Toast helper

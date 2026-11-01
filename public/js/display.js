@@ -96,6 +96,39 @@ const scoreComment = document.getElementById('scoreComment');
 const scoreCountdownFill = document.getElementById('scoreCountdownFill');
 const scoreTimerNum = document.getElementById('scoreTimerNum');
 
+// Multi-Room HUD Elements
+const hudRoomCode = document.getElementById('hudRoomCode');
+const hudUsersCount = document.getElementById('hudUsersCount');
+const idleRoomCodeDigits = document.getElementById('idleRoomCodeDigits');
+const topRoomCode = document.getElementById('topRoomCode');
+const cornerRoomCode = document.getElementById('cornerRoomCode');
+
+const urlParams = new URLSearchParams(window.location.search);
+let currentRoomCode = urlParams.get('room') || localStorage.getItem('ktv_display_room') || '';
+
+function updateRoomDisplay(code) {
+  if (!code) return;
+  currentRoomCode = code;
+  localStorage.setItem('ktv_display_room', code);
+
+  if (hudRoomCode) hudRoomCode.textContent = code;
+  if (idleRoomCodeDigits) idleRoomCodeDigits.textContent = code;
+  if (topRoomCode) topRoomCode.textContent = code;
+  if (cornerRoomCode) cornerRoomCode.textContent = code;
+
+  const currentOrigin = window.location.origin;
+  const currentRemoteUrl = `${currentOrigin}/remote?room=${code}`;
+  if (idleQrImage) idleQrImage.src = `/api/qr?url=${encodeURIComponent(currentRemoteUrl)}`;
+  if (cornerQrImg) cornerQrImg.src = `/api/qr?url=${encodeURIComponent(currentRemoteUrl)}`;
+  if (idleQrUrl) idleQrUrl.textContent = currentRemoteUrl;
+}
+
+function updateUsersDisplay(users) {
+  if (!hudUsersCount) return;
+  const count = Array.isArray(users) ? users.length : 0;
+  hudUsersCount.textContent = `${count} คน`;
+}
+
 function showTvPlayOverlay() {
   if (tvPlayOverlay) tvPlayOverlay.classList.add('active');
 }
@@ -265,15 +298,21 @@ function formatTime(seconds) {
   return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
 }
 
-// Setup QR code and URL directly from current page origin
-const currentOrigin = window.location.origin;
-const currentRemoteUrl = `${currentOrigin}/remote`;
-idleQrImage.src = `/api/qr?url=${encodeURIComponent(currentRemoteUrl)}`;
-cornerQrImg.src = `/api/qr?url=${encodeURIComponent(currentRemoteUrl)}`;
-idleQrUrl.textContent = currentRemoteUrl;
+// Socket Connection & Room Lifecycle
+socket.on('connect', () => {
+  console.log('📡 Connected to server, initializing display for room:', currentRoomCode || '(auto-generate)');
+  socket.emit('display:init', { requestedRoom: currentRoomCode });
+});
 
 // Socket Events
 socket.on('state:sync', (data) => {
+  if (data.roomCode) {
+    updateRoomDisplay(data.roomCode);
+  }
+  if (data.users) {
+    updateUsersDisplay(data.users);
+  }
+
   currentActiveSong = data.currentSong;
   updateQueueDisplay(data.songQueue, data.currentSong);
 
@@ -295,6 +334,10 @@ socket.on('state:sync', (data) => {
   } else if (!data.currentSong) {
     showIdleScreen();
   }
+});
+
+socket.on('room:users_update', ({ users }) => {
+  updateUsersDisplay(users);
 });
 
 socket.on('queue:update', ({ songQueue, currentSong }) => {

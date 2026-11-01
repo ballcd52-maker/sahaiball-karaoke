@@ -18,17 +18,23 @@
         <span class="logo-icon">🎤</span>
         <div class="brand-text">
           <h1>SahaiBall KARAOKE</h1>
-          <span class="status-online"><span class="dot"></span> เชื่อมต่อทีวีแล้ว</span>
+          <div class="header-sub-row">
+            <span class="status-online"><span class="dot"></span> เชื่อมต่อแล้ว</span>
+            <button id="roomBadgeBtn" class="cyber-room-pill" title="แตะเพื่อดูสมาชิก / สลับห้อง">
+              <span class="room-icon">🔑</span>
+              <span id="roomCodeDisplay">ห้อง: ----</span>
+            </button>
+          </div>
         </div>
       </div>
       
       <div class="header-actions">
         <button id="shareRemoteBtn" class="cyber-share-btn" title="ส่งลิงก์เข้า LINE ให้เพื่อน">
           <span class="icon">🔗</span>
-          <span>ส่ง LINE</span>
+          <span>ชวนเพื่อน</span>
         </button>
-        <div class="user-badge" id="userBadgeBtn">
-          <span class="user-avatar">👤</span>
+        <div class="user-badge" id="userBadgeBtn" title="แตะเพื่อตั้งชื่อหรือเปลี่ยนห้อง">
+          <span class="user-avatar" id="userAvatarIcon">👤</span>
           <span id="userNameDisplay">ฉันเอง</span>
         </div>
       </div>
@@ -150,6 +156,15 @@
       <section id="tabControls" class="tab-view">
         <div class="controls-panel">
           <h2>🎛️ แผงควบคุมเครื่องเล่น</h2>
+
+          <!-- Guest Control Notice (Shown if user is not host and open party mode is off) -->
+          <div id="guestControlNotice" class="guest-control-notice" style="display:none;">
+            <span class="icon">👑</span>
+            <div class="notice-text">
+              <strong>ควบคุมโดยหัวหน้าห้อง</strong>
+              <span>เฉพาะหัวหน้าห้องเท่านั้นที่สามารถควบคุมการเล่นได้ (คุณสามารถขอเพลงและส่งซาวด์เอฟเฟกต์ได้ตามปกติ)</span>
+            </div>
+          </div>
 
           <!-- Main Playback Controls -->
           <div class="control-grid-main">
@@ -359,14 +374,94 @@
       </button>
     </nav>
 
-    <!-- User Nickname Modal -->
+    <!-- Room Join & Setup Modal -->
+    <div id="roomJoinModal" class="modal-overlay">
+      <div class="modal-box room-join-box">
+        <div class="modal-header-icon">🔑</div>
+        <h3>เข้าห้องร้องคาราโอเกะ</h3>
+        <p>ใส่รหัส 4 หลักที่แสดงบนหน้าจอทีวี หรือสร้างห้องใหม่</p>
+
+        <div class="form-group">
+          <label>🔢 รหัสห้อง 4 หลัก (Room PIN)</label>
+          <input type="text" id="roomPinInput" class="pin-input" placeholder="เช่น 5829" maxlength="4" pattern="[0-9]*" inputmode="numeric" autocomplete="off">
+        </div>
+
+        <div class="form-group">
+          <label>👤 ชื่อเล่นของคุณ</label>
+          <input type="text" id="joinNicknameInput" placeholder="ใส่ชื่อเล่น เช่น บอล, มุก..." maxlength="20" autocomplete="off">
+        </div>
+
+        <div class="role-selector-card">
+          <label class="role-radio-item">
+            <input type="radio" name="joinRoleRadio" value="member" checked>
+            <div class="role-label-box">
+              <span class="role-name">👤 สมาชิกทั่วไป (คนขอเพลง)</span>
+              <span class="role-desc">ค้นหาเพลง ขอเพลง ส่งสติกเกอร์ และซาวด์เอฟเฟกต์</span>
+            </div>
+          </label>
+          <label class="role-radio-item">
+            <input type="radio" name="joinRoleRadio" value="host">
+            <div class="role-label-box">
+              <span class="role-name">👑 หัวหน้าห้อง (ผู้คุมจอ / เจ้าของห้อง)</span>
+              <span class="role-desc">คุมการเล่น ข้ามเพลง ปรับคีย์/ความเร็ว และจัดคิวเพลง</span>
+            </div>
+          </label>
+        </div>
+
+        <div class="modal-actions-col">
+          <button type="button" id="btnJoinRoomSubmit" class="modal-btn primary large">🚀 เข้าสู่ห้องคาราโอเกะ</button>
+          <button type="button" id="btnCreateRoomSubmit" class="modal-btn secondary">✨ สร้างห้องใหม่ด้วยเลขนี้</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Room Details & Members Modal -->
+    <div id="roomDetailsModal" class="modal-overlay">
+      <div class="modal-box">
+        <div class="modal-top-bar">
+          <h3>🔑 ข้อมูลห้อง <span id="detailsRoomCodeText">----</span></h3>
+          <button id="closeRoomDetailsBtn" class="close-modal-btn">&times;</button>
+        </div>
+        
+        <div class="room-share-card">
+          <div class="share-info">
+            <span class="label">ลิงก์ชวนเพื่อนเข้าห้องนี้:</span>
+            <span class="url" id="detailsShareUrlText">https://...</span>
+          </div>
+          <button id="btnCopyRoomLink" class="sm-tag-btn">📋 คัดลอกลิงก์</button>
+        </div>
+
+        <!-- Host Settings (shown if host) -->
+        <div id="hostOnlySettingsBox" class="host-settings-card" style="display:none;">
+          <h4>👑 การตั้งค่าหัวหน้าห้อง</h4>
+          <label class="cyber-checkbox-row">
+            <input type="checkbox" id="allowGuestControlsToggle">
+            <span>🔓 อนุญาตให้เพื่อนทุกคนข้าม/ควบคุมเพลงได้</span>
+          </label>
+        </div>
+
+        <div class="room-members-section">
+          <h4>👥 สมาชิกในห้องตอนนี้ (<span id="detailsMembersCount">0</span> คน)</h4>
+          <div id="roomMembersList" class="members-list">
+            <!-- Rendered dynamically -->
+          </div>
+        </div>
+
+        <div class="modal-actions" style="margin-top: 15px;">
+          <button id="btnSwitchRoom" class="modal-btn text-danger">🚪 สลับไปห้องอื่น / ออกจากห้อง</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Edit Nickname Modal (Lightweight) -->
     <div id="nicknameModal" class="modal-overlay">
       <div class="modal-box">
-        <h3>👤 ตั้งชื่อของคุณ</h3>
+        <h3>👤 แก้ไขชื่อเล่นของคุณ</h3>
         <p>ชื่อนี้จะแสดงบนจอทีวีตอนขอเพลงและส่งข้อความเชียร์</p>
         <input type="text" id="nicknameInput" placeholder="ใส่ชื่อเล่นของคุณ..." maxlength="20">
         <div class="modal-actions">
           <button id="saveNicknameBtn" class="modal-btn primary">บันทึกชื่อ</button>
+          <button id="cancelNicknameBtn" class="modal-btn secondary">ยกเลิก</button>
         </div>
       </div>
     </div>

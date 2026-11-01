@@ -41,11 +41,19 @@
       <div class="idle-ambient-glow"></div>
       
       <div class="idle-content">
-        <!-- Cyber HUD Header with Real-time Clock -->
+        <!-- Cyber HUD Header with Real-time Clock & Room Info -->
         <div class="cyber-hud-top">
           <div class="brand-badge">
             <span class="icon">🎤</span>
             <span>SahaiBall Karaoke</span>
+          </div>
+          <div class="hud-room-badge" id="hudRoomBadge">
+            <span class="icon">🔑</span>
+            <span>รหัสห้อง: <strong id="hudRoomCode">----</strong></span>
+          </div>
+          <div class="hud-users-badge" id="hudUsersBadge">
+            <span class="icon">👥</span>
+            <span id="hudUsersCount">0 คน</span>
           </div>
           <div class="cyber-clock-box">
             <span class="pulse-dot green"></span>
@@ -54,7 +62,13 @@
         </div>
         
         <h1 class="idle-title">พร้อมเปิดเวทีร้องเพลงแล้ว!</h1>
-        <p class="idle-subtitle">ใช้โทรศัพท์มือถือเปิดกล้องสแกน QR Code ด้านล่าง เพื่อค้นหาเพลงและส่งเข้าคิวได้ทันที</p>
+        
+        <!-- Big 4-Digit Room Code Banner -->
+        <div class="idle-room-banner">
+          <div class="room-banner-label">🔑 รหัสห้องร้องเพลง 4 หลัก</div>
+          <div class="room-banner-code" id="idleRoomCodeDigits">----</div>
+          <div class="room-banner-sub">บอกรหัส 4 หลักนี้ให้เพื่อน หรือใช้กล้องมือถือสแกน QR Code ด้านล่างเพื่อขอเพลงได้พร้อมกัน!</div>
+        </div>
 
         <div class="qr-box cyber-qr-box">
           <div class="qr-corner-tl"></div>
@@ -112,6 +126,9 @@
         </div>
         <div id="speedBadge" class="param-badge" style="display:none;">
           <span>⚡ 1.0x</span>
+        </div>
+        <div class="top-room-badge" id="topRoomBadge">
+          <span>🔑 ห้อง: <strong id="topRoomCode">----</strong></span>
         </div>
       </div>
 
@@ -172,7 +189,10 @@
     <!-- Corner Mini QR Code (Visible during video playback) -->
     <div class="corner-qr" id="cornerQr" title="สแกนเพื่อสั่งเพลง">
       <img id="cornerQrImg" src="" alt="QR">
-      <span>สั่งเพลง</span>
+      <div class="corner-qr-meta">
+        <span class="corner-qr-title">สั่งเพลง</span>
+        <span class="corner-qr-code">ห้อง: <strong id="cornerRoomCode">----</strong></span>
+      </div>
     </div>
 
     <!-- Fullscreen Toggle Button -->
