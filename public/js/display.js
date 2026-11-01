@@ -136,6 +136,32 @@ function updateRoomDisplay(code) {
   if (hudRemoteSwitchBtn) hudRemoteSwitchBtn.href = currentRemoteUrl;
 }
 
+// Click to change room code manually (e.g. set to 8999)
+const changeRoomHandler = () => {
+  const newCode = prompt('🔢 ใส่รหัสห้อง 4 หลักที่ต้องการ (เช่น 8999):', currentRoomCode || '8999');
+  if (newCode && /^\d{4}$/.test(newCode.trim())) {
+    const clean = newCode.trim();
+    localStorage.setItem('ktv_display_room', clean);
+    window.location.search = `?room=${clean}`;
+  } else if (newCode) {
+    alert('รหัสห้องต้องเป็นตัวเลข 4 หลักเท่านั้นครับ');
+  }
+};
+
+const hudRoomBadgeEl = document.getElementById('hudRoomBadge');
+if (hudRoomBadgeEl) {
+  hudRoomBadgeEl.style.cursor = 'pointer';
+  hudRoomBadgeEl.title = 'แตะเพื่อเปลี่ยนรหัสห้อง (เช่น 8999)';
+  hudRoomBadgeEl.addEventListener('click', changeRoomHandler);
+}
+
+const idleBannerEl = document.querySelector('.idle-room-banner');
+if (idleBannerEl) {
+  idleBannerEl.style.cursor = 'pointer';
+  idleBannerEl.title = 'แตะเพื่อเปลี่ยนรหัสห้อง (เช่น 8999)';
+  idleBannerEl.addEventListener('click', changeRoomHandler);
+}
+
 function updateUsersDisplay(users) {
   if (!hudUsersCount) return;
   const count = Array.isArray(users) ? users.length : 0;
