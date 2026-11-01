@@ -1,10 +1,20 @@
 const socket = io();
 
+// Ensure YouTube persistent localStorage sticky-caption is forced to FALSE (clean display without auto speech-to-text)
+try {
+  localStorage.setItem("yt-player-sticky-caption", JSON.stringify({
+    data: "false",
+    expiration: Date.now() + 315360000000,
+    creation: Date.now()
+  }));
+} catch (e) {}
+
 let player = null;
 let isPlayerReady = false;
 let currentVideoId = null;
 let progressTimer = null;
 let isVocalCut = false;
+let captionsDisabled = true; // Auto-captions disabled by default for clean MV and karaoke display
 let currentActiveSong = null;
 let scoreTimeout = null;
 let scoreInterval = null;
@@ -160,6 +170,69 @@ if (tvPlayBtn) {
   });
 }
 
+// Subtitles & Auto-Captions Controller (Clean view without YouTube speech-to-text captions)
+function disableCaptions() {
+  if (!captionsDisabled) return;
+  // 1. Direct YouTube Player API methods
+  try {
+    if (player) {
+      if (typeof player.unloadModule === 'function') {
+        player.unloadModule('captions');
+        player.unloadModule('cc');
+      }
+      if (typeof player.setOption === 'function') {
+        player.setOption('captions', 'track', {});
+        player.setOption('cc', 'track', {});
+        player.setOption('captions', 'reload', false);
+        player.setOption('captions', 'fontSize', 0);
+      }
+    }
+  } catch (e) {}
+
+  // 2. PostMessage commands directly to YouTube iframe window
+  try {
+    const iframe = document.getElementById('ytPlayer');
+    if (iframe && iframe.contentWindow) {
+      const cmds = [
+        ['unloadModule', ['captions']],
+        ['unloadModule', ['cc']],
+        ['setOption', ['captions', 'track', {}]],
+        ['setOption', ['cc', 'track', {}]],
+        ['setOption', ['captions', 'fontSize', 0]],
+        ['setOption', ['captions', 'reload', false]]
+      ];
+      cmds.forEach(([func, args]) => {
+        iframe.contentWindow.postMessage(JSON.stringify({
+          event: 'command',
+          func: func,
+          args: args
+        }), '*');
+      });
+    }
+  } catch (e) {}
+}
+
+function enableCaptions() {
+  captionsDisabled = false;
+  try {
+    if (player) {
+      if (typeof player.loadModule === 'function') {
+        player.loadModule('captions');
+      }
+      if (typeof player.setOption === 'function') {
+        player.setOption('captions', 'track', { languageCode: 'th' });
+        player.setOption('captions', 'reload', true);
+      }
+    }
+  } catch (e) {}
+}
+
+function onPlayerApiChange(event) {
+  if (captionsDisabled) {
+    disableCaptions();
+  }
+}
+
 // YouTube IFrame API Ready Callback
 function onYouTubeIframeAPIReady() {
   player = new YT.Player('ytPlayer', {
@@ -171,6 +244,7 @@ function onYouTubeIframeAPIReady() {
       disablekb: 1,
       fs: 0,
       iv_load_policy: 3,
+      cc_load_policy: 0,
       modestbranding: 1,
       rel: 0,
       enablejsapi: 1,
@@ -179,6 +253,7 @@ function onYouTubeIframeAPIReady() {
     events: {
       onReady: onPlayerReady,
       onStateChange: onPlayerStateChange,
+      onApiChange: onPlayerApiChange,
       onError: onPlayerError
     }
   });
@@ -187,6 +262,7 @@ function onYouTubeIframeAPIReady() {
 function onPlayerReady(event) {
   isPlayerReady = true;
   console.log('✅ YouTube TV Player Ready');
+  disableCaptions();
   socket.emit('request:sync');
 }
 
@@ -204,6 +280,17 @@ function onPlayerStateChange(event) {
     hideTvErrorNotice();
     startProgressTracker();
     showTopOverlay(10000);
+
+    // Turn off YouTube automated speech captions across multiple timing phases
+    if (captionsDisabled) {
+      disableCaptions();
+      setTimeout(disableCaptions, 250);
+      setTimeout(disableCaptions, 600);
+      setTimeout(disableCaptions, 1200);
+      setTimeout(disableCaptions, 2500);
+      setTimeout(disableCaptions, 4500);
+    }
+
     socket.emit('tv:state_update', {
       isPlaying: true,
       currentTime: player.getCurrentTime(),
@@ -220,8 +307,10 @@ function onPlayerStateChange(event) {
     console.log('Video buffering...');
     hideTvPlayOverlay();
     hideTvErrorNotice();
+    if (captionsDisabled) disableCaptions();
   } else if (event.data === YT.PlayerState.CUED) {
     console.log('Video cued, attempting auto-play...');
+    if (captionsDisabled) disableCaptions();
     if (player && player.playVideo) player.playVideo();
   }
 }
@@ -402,6 +491,14 @@ socket.on('tv:command', (cmd) => {
       isVocalCut = cmd.isVocalCut;
       updateVocalBadge(isVocalCut);
       break;
+    case 'toggle_cc':
+      captionsDisabled = !cmd.value;
+      if (captionsDisabled) {
+        disableCaptions();
+      } else {
+        enableCaptions();
+      }
+      break;
     case 'dismiss_score':
       hideScoreScreen();
       break;
@@ -432,6 +529,9 @@ function loadVideo(videoId) {
       videoId: videoId,
       suggestedQuality: 'hd720'
     });
+    if (captionsDisabled) {
+      disableCaptions();
+    }
     if (player.playVideo) {
       player.playVideo();
     }

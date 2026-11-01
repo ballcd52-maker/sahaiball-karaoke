@@ -556,6 +556,10 @@ io.on('connection', (socket) => {
       room.playerState.isBoosted = Boolean(value);
       broadcastRoomUpdate(room.code, 'tv:command', { action: 'boost', value: room.playerState.isBoosted });
       broadcastRoomUpdate(room.code, 'player:state', room.playerState);
+    } else if (action === 'toggle_cc') {
+      room.playerState.showCaptions = Boolean(value);
+      broadcastRoomUpdate(room.code, 'tv:command', { action: 'toggle_cc', value: room.playerState.showCaptions });
+      broadcastRoomUpdate(room.code, 'player:state', room.playerState);
     } else if (action === 'seek') {
       broadcastRoomUpdate(room.code, 'tv:command', { action: 'seek', value });
     }

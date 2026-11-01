@@ -104,6 +104,9 @@ const vocalSwapBtn = document.getElementById('vocalSwapBtn');
 const vocalCutBtn = document.getElementById('vocalCutBtn');
 const vocalCutTitle = document.getElementById('vocalCutTitle');
 const vocalCutDesc = document.getElementById('vocalCutDesc');
+const toggleCcBtn = document.getElementById('toggleCcBtn');
+const toggleCcTitle = document.getElementById('toggleCcTitle');
+const toggleCcDesc = document.getElementById('toggleCcDesc');
 
 // Reactions & Soundboard Tab
 const sfxBtns = document.querySelectorAll('.sfx-btn');
@@ -511,6 +514,18 @@ function updateControlButtons() {
     vocalCutTitle.textContent = 'ตัดเสียงร้อง (Vocal Suppression)';
     vocalCutDesc.textContent = 'ลดเสียงร้องแชนเนลตรงกลาง / สเตอริโอ';
   }
+
+  if (toggleCcBtn) {
+    if (playerState.showCaptions) {
+      toggleCcBtn.classList.add('active');
+      if (toggleCcTitle) toggleCcTitle.textContent = 'คำบรรยาย/ซับไตเติล: เปิดอยู่';
+      if (toggleCcDesc) toggleCcDesc.textContent = 'กำลังเปิดซับไตเติลอัตโนมัติ แตะเพื่อปิด';
+    } else {
+      toggleCcBtn.classList.remove('active');
+      if (toggleCcTitle) toggleCcTitle.textContent = 'คำบรรยาย/ซับไตเติล: ปิดอยู่ (ภาพคลีน)';
+      if (toggleCcDesc) toggleCcDesc.textContent = 'ปิดตัวหนังสืออัตโนมัติของ YouTube เพื่อดูภาพ MV แบบคลีนๆ';
+    }
+  }
 }
 
 // Queue Rendering
@@ -813,6 +828,20 @@ vocalSwapBtn.addEventListener('click', () => {
   socket.emit('player:toggle_vocal', 'swap_video');
   showToast('⚡ กำลังค้นหาและสลับเป็นเวอร์ชันดนตรีคาราโอเกะ...');
 });
+
+if (toggleCcBtn) {
+  toggleCcBtn.addEventListener('click', () => {
+    if (!canControlPlayback()) {
+      showToast('👑 เฉพาะหัวหน้าห้องเท่านั้นที่สามารถปรับแต่งได้');
+      return;
+    }
+    const newStatus = !playerState.showCaptions;
+    socket.emit('player:control', { action: 'toggle_cc', value: newStatus });
+    playerState.showCaptions = newStatus;
+    updateControlButtons();
+    showToast(newStatus ? '💬 เปิดคำบรรยายอัตโนมัติ (CC)' : '🚫 ปิดคำบรรยายอัตโนมัติ (โหมดภาพคลีน)');
+  });
+}
 
 // SFX Soundboard Buttons (Anyone in room can trigger!)
 sfxBtns.forEach(btn => {
