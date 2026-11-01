@@ -121,6 +121,8 @@ function updateRoomDisplay(code) {
   if (idleQrImage) idleQrImage.src = `/api/qr?url=${encodeURIComponent(currentRemoteUrl)}`;
   if (cornerQrImg) cornerQrImg.src = `/api/qr?url=${encodeURIComponent(currentRemoteUrl)}`;
   if (idleQrUrl) idleQrUrl.textContent = currentRemoteUrl;
+  const hudRemoteSwitchBtn = document.getElementById('hudRemoteSwitchBtn');
+  if (hudRemoteSwitchBtn) hudRemoteSwitchBtn.href = currentRemoteUrl;
 }
 
 function updateUsersDisplay(users) {

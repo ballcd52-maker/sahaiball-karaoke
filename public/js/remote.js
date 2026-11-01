@@ -209,6 +209,10 @@ function updateRoomUI() {
   if (detailsShareUrlText) {
     detailsShareUrlText.textContent = `${window.location.origin}/remote?room=${currentRoomCode}`;
   }
+  const btnOpenTvScreen = document.getElementById('btnOpenTvScreen');
+  if (btnOpenTvScreen) {
+    btnOpenTvScreen.href = currentRoomCode ? `/display.html?room=${currentRoomCode}` : '/display.html';
+  }
 
   // Permissions in Controls Tab
   updateControlsPermissionUI();

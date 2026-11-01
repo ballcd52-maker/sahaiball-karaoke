@@ -60,8 +60,11 @@ body, html {
   height: 100%;
   z-index: 10;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  flex-direction: column;
+  overflow-y: auto;
+  overflow-x: hidden;
+  box-sizing: border-box;
+  padding: env(safe-area-inset-top, 8px) env(safe-area-inset-right, 12px) env(safe-area-inset-bottom, 8px) env(safe-area-inset-left, 12px);
   background: radial-gradient(ellipse at 50% 40%, #201335 0%, #0d0a1a 60%, #06050b 100%);
   opacity: 0;
   pointer-events: none;
@@ -75,98 +78,111 @@ body, html {
 
 .idle-ambient-glow {
   position: absolute;
-  width: 600px;
-  height: 600px;
+  width: min(600px, 80vw);
+  height: min(600px, 80vh);
   background: radial-gradient(circle, rgba(168, 85, 247, 0.2) 0%, rgba(59, 130, 246, 0.08) 45%, transparent 70%);
   border-radius: 50%;
   pointer-events: none;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
 }
 
 @keyframes pulse-glow {
-  0% { transform: scale(0.9) translate(-50px, -30px); opacity: 0.6; }
-  100% { transform: scale(1.15) translate(50px, 30px); opacity: 0.9; }
+  0% { transform: translate(-50%, -50%) scale(0.9); opacity: 0.6; }
+  100% { transform: translate(-50%, -50%) scale(1.15); opacity: 0.9; }
 }
 
 .idle-content {
   position: relative;
   z-index: 2;
   text-align: center;
+  width: 100%;
   max-width: 900px;
-  padding: 40px;
+  margin: auto; /* Vertically and horizontally centers when space permits; avoids clipping top on small viewports */
+  padding: clamp(6px, 1.2vh, 18px) clamp(10px, 2vw, 24px);
   display: flex;
   flex-direction: column;
   align-items: center;
+  box-sizing: border-box;
 }
 
 .brand-badge {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 6px;
   background: rgba(26, 16, 45, 0.9);
   border: 1px solid rgba(255, 255, 255, 0.15);
-  padding: 8px 20px;
+  padding: clamp(3px, 0.6vh, 6px) clamp(10px, 1.5vw, 16px);
   border-radius: 50px;
-  font-size: 1.1rem;
+  font-size: clamp(0.75rem, 1.6vh, 0.95rem);
   font-weight: 600;
-  letter-spacing: 2px;
+  letter-spacing: 1px;
   color: #c084fc;
-  margin-bottom: 20px;
 }
 
 .idle-title {
-  font-size: 4rem;
+  font-size: clamp(1.2rem, 3.4vh, 2.6rem);
   font-weight: 700;
   background: linear-gradient(135deg, #fff 30%, #a855f7 70%, #38bdf8 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
-  margin-bottom: 15px;
-  text-shadow: 0 10px 30px rgba(168, 85, 247, 0.3);
+  margin-bottom: clamp(4px, 1vh, 10px);
+  text-shadow: 0 8px 24px rgba(168, 85, 247, 0.3);
+  line-height: 1.15;
 }
 
 .idle-subtitle {
-  font-size: 1.5rem;
+  font-size: clamp(0.8rem, 1.8vh, 1.2rem);
   color: #cbd5e1;
   font-weight: 300;
-  margin-bottom: 35px;
+  margin-bottom: clamp(6px, 1.5vh, 16px);
 }
 
 .qr-box {
   background: #ffffff;
-  padding: 16px;
-  border-radius: 24px;
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6), 0 0 40px rgba(168, 85, 247, 0.4);
+  padding: clamp(8px, 1.5vh, 16px);
+  border-radius: clamp(14px, 2vh, 20px);
+  box-shadow: 0 15px 40px rgba(0, 0, 0, 0.6), 0 0 30px rgba(168, 85, 247, 0.3);
   display: flex;
   flex-direction: column;
   align-items: center;
   transition: transform 0.3s ease;
+  box-sizing: border-box;
 }
 
 .qr-box:hover {
-  transform: scale(1.03);
+  transform: scale(1.02);
 }
 
 .qr-box img {
-  width: 220px;
-  height: 220px;
+  width: clamp(90px, 16vh, 175px);
+  height: clamp(90px, 16vh, 175px);
   display: block;
+  object-fit: contain;
 }
 
 .qr-label {
-  margin-top: 10px;
+  margin-top: clamp(4px, 0.8vh, 8px);
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 1.05rem;
-  color: #1e1b4b;
-  font-weight: 600;
+  gap: 6px;
+  font-size: clamp(0.65rem, 1.3vh, 0.85rem);
+  color: #c084fc;
+  font-weight: 500;
+  max-width: 90vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .pulse-dot {
-  width: 10px;
-  height: 10px;
+  width: 8px;
+  height: 8px;
   background-color: #22c55e;
   border-radius: 50%;
   animation: blink 1.5s infinite;
+  flex-shrink: 0;
 }
 
 @keyframes blink {
@@ -176,19 +192,21 @@ body, html {
 
 .idle-tips {
   display: flex;
-  gap: 15px;
+  gap: clamp(4px, 1vw, 10px);
   flex-wrap: wrap;
   justify-content: center;
-  margin-top: 40px;
+  margin-top: clamp(6px, 1.2vh, 14px);
+  max-width: 860px;
 }
 
 .tip-pill {
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.12);
-  padding: 10px 22px;
-  border-radius: 40px;
-  font-size: 1.1rem;
-  color: #e2e8f0;
+  padding: clamp(3px, 0.6vh, 7px) clamp(8px, 1.2vw, 14px);
+  border-radius: 30px;
+  font-size: clamp(0.68rem, 1.4vh, 0.85rem);
+  color: #cbd5e1;
+  white-space: nowrap;
 }
 
 /* Top Bar (Now Playing + Up Next) */
@@ -731,58 +749,85 @@ body, html {
 .cyber-hud-top {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
+  flex-wrap: wrap;
   width: 100%;
-  max-width: 820px;
-  margin-bottom: 16px;
-  gap: 12px;
+  max-width: 860px;
+  margin-bottom: clamp(6px, 1.2vh, 14px);
+  gap: clamp(6px, 1vw, 12px);
 }
 
 .hud-room-badge {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   background: rgba(250, 204, 21, 0.15);
   border: 1px solid rgba(250, 204, 21, 0.5);
   border-radius: 30px;
-  padding: 6px 16px;
-  font-size: 1.05rem;
+  padding: clamp(3px, 0.6vh, 6px) clamp(10px, 1.5vw, 14px);
+  font-size: clamp(0.75rem, 1.6vh, 0.95rem);
   font-weight: 600;
   color: #fef08a;
   box-shadow: 0 0 15px rgba(250, 204, 21, 0.2);
 }
 
 .hud-room-badge strong {
-  font-size: 1.25rem;
-  letter-spacing: 2px;
+  font-size: clamp(0.85rem, 1.8vh, 1.15rem);
+  letter-spacing: 1px;
   color: #fff;
 }
 
 .hud-users-badge {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   background: rgba(59, 130, 246, 0.15);
   border: 1px solid rgba(59, 130, 246, 0.4);
   border-radius: 30px;
-  padding: 6px 14px;
-  font-size: 1rem;
+  padding: clamp(3px, 0.6vh, 6px) clamp(8px, 1.2vw, 12px);
+  font-size: clamp(0.72rem, 1.5vh, 0.9rem);
   font-weight: 600;
   color: #93c5fd;
+}
+
+.hud-remote-switch-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: linear-gradient(135deg, #9333ea, #4f46e5);
+  color: #ffffff !important;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: clamp(0.72rem, 1.5vh, 0.9rem);
+  padding: clamp(3px, 0.6vh, 6px) clamp(10px, 1.5vw, 14px);
+  border-radius: 30px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  box-shadow: 0 0 15px rgba(168, 85, 247, 0.35);
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.hud-remote-switch-btn:hover, .hud-remote-switch-btn:active {
+  transform: translateY(-1px) scale(1.03);
+  box-shadow: 0 0 25px rgba(168, 85, 247, 0.6);
+  background: linear-gradient(135deg, #a855f7, #6366f1);
 }
 
 .idle-room-banner {
   background: linear-gradient(135deg, rgba(234, 179, 8, 0.12) 0%, rgba(168, 85, 247, 0.15) 100%);
   border: 2px solid rgba(250, 204, 21, 0.6);
-  border-radius: 20px;
-  padding: 16px 36px;
-  margin-bottom: 22px;
+  border-radius: clamp(12px, 1.8vh, 18px);
+  padding: clamp(6px, 1.2vh, 12px) clamp(14px, 3vw, 28px);
+  margin-bottom: clamp(6px, 1.2vh, 14px);
   text-align: center;
-  box-shadow: 0 0 35px rgba(250, 204, 21, 0.25), 0 10px 30px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 0 30px rgba(250, 204, 21, 0.2), 0 8px 24px rgba(0, 0, 0, 0.5);
+  max-width: 92%;
+  box-sizing: border-box;
 }
 
 .room-banner-label {
-  font-size: 1.05rem;
+  font-size: clamp(0.75rem, 1.6vh, 0.95rem);
   font-weight: 600;
   color: #fef08a;
   letter-spacing: 1px;
@@ -790,19 +835,20 @@ body, html {
 
 .room-banner-code {
   font-family: 'Kanit', monospace, sans-serif;
-  font-size: 4rem;
+  font-size: clamp(1.8rem, 5.2vh, 3.6rem);
   font-weight: 800;
-  letter-spacing: 12px;
+  letter-spacing: clamp(6px, 1.2vw, 12px);
   color: #ffffff;
   text-shadow: 0 0 20px rgba(250, 204, 21, 0.8), 0 0 40px rgba(168, 85, 247, 0.6);
-  line-height: 1.1;
-  margin: 6px 0;
+  line-height: 1.05;
+  margin: clamp(2px, 0.4vh, 4px) 0;
 }
 
 .room-banner-sub {
-  font-size: 1rem;
+  font-size: clamp(0.68rem, 1.4vh, 0.9rem);
   color: #cbd5e1;
   font-weight: 400;
+  line-height: 1.2;
 }
 
 .top-room-badge {
@@ -844,13 +890,13 @@ body, html {
 .cyber-clock-box {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 6px;
   background: rgba(0, 240, 255, 0.08);
   border: 1px solid rgba(0, 240, 255, 0.35);
   border-radius: 30px;
-  padding: 6px 16px;
+  padding: clamp(3px, 0.6vh, 6px) clamp(10px, 1.5vw, 14px);
   font-family: monospace;
-  font-size: 1.15rem;
+  font-size: clamp(0.75rem, 1.7vh, 1rem);
   font-weight: 700;
   color: #00f0ff;
   text-shadow: 0 0 10px rgba(0, 240, 255, 0.5);
@@ -867,9 +913,9 @@ body, html {
   position: relative;
   background: rgba(15, 12, 32, 0.85);
   border: 1px solid rgba(168, 85, 247, 0.4);
-  box-shadow: 0 0 35px rgba(168, 85, 247, 0.25), 0 10px 30px rgba(0, 0, 0, 0.6);
-  padding: 24px;
-  border-radius: 24px;
+  box-shadow: 0 0 30px rgba(168, 85, 247, 0.2), 0 8px 25px rgba(0, 0, 0, 0.6);
+  padding: clamp(8px, 1.4vh, 16px);
+  border-radius: clamp(12px, 1.8vh, 18px);
 }
 
 .qr-corner-tl, .qr-corner-tr, .qr-corner-bl, .qr-corner-br {
@@ -976,5 +1022,189 @@ body, html {
 @keyframes pulseBoost {
   0%, 100% { opacity: 0.85; }
   50% { opacity: 1; transform: scale(1.05); }
+}
+
+/* ==========================================================================
+   Comprehensive Responsive Layout (Smart TV, PC, Tablet, LDPlayer, Mobile)
+   ========================================================================== */
+
+/* Very Short Displays (e.g. Android Emulators, 720p/540p landscape with high density, landscape phones) */
+@media (max-height: 540px) {
+  .idle-content {
+    padding: 4px 10px;
+  }
+  .idle-title {
+    font-size: clamp(1rem, 2.8vh, 1.6rem);
+    margin-bottom: 2px;
+  }
+  .idle-tips {
+    display: none !important; /* Hide non-essential tips so Code & QR fit 100% without scrolling */
+  }
+  .idle-room-banner {
+    padding: 4px 12px;
+    margin-bottom: 4px;
+  }
+  .room-banner-label {
+    font-size: 0.72rem;
+  }
+  .room-banner-code {
+    font-size: clamp(1.4rem, 4.5vh, 2.2rem);
+    letter-spacing: 5px;
+    margin: 1px 0;
+  }
+  .room-banner-sub {
+    font-size: 0.65rem;
+  }
+  .cyber-qr-box {
+    padding: 5px;
+  }
+  .cyber-qr-box img#idleQrImage {
+    width: clamp(75px, 14vh, 115px);
+    height: clamp(75px, 14vh, 115px);
+  }
+  .qr-label {
+    font-size: 0.65rem;
+    margin-top: 3px;
+  }
+  .cyber-hud-top {
+    margin-bottom: 4px;
+    gap: 5px;
+  }
+  .top-overlay {
+    top: 8px;
+    left: 12px;
+    right: 12px;
+  }
+  .now-playing-card {
+    padding: 4px 10px;
+    gap: 8px;
+  }
+  .song-title {
+    font-size: 0.95rem;
+  }
+  .up-next-card {
+    padding: 4px 10px;
+  }
+  .corner-qr {
+    bottom: 18px;
+    right: 12px;
+    padding: 3px;
+  }
+  .corner-qr img {
+    width: 42px;
+    height: 42px;
+  }
+  .bottom-bar {
+    padding: 6px 14px;
+  }
+}
+
+/* Mobile Portrait Mode / Narrow Displays (Phones & Narrow Browser Windows) */
+@media (max-width: 768px), (max-aspect-ratio: 1/1) {
+  .cyber-hud-top {
+    justify-content: center;
+    gap: 6px;
+  }
+  .brand-badge {
+    font-size: 0.8rem;
+    padding: 4px 10px;
+  }
+  .hud-room-badge {
+    font-size: 0.8rem;
+    padding: 4px 10px;
+  }
+  .hud-remote-switch-btn {
+    font-size: 0.8rem;
+    padding: 4px 10px;
+  }
+  .cyber-clock-box {
+    font-size: 0.8rem;
+    padding: 4px 10px;
+  }
+  .idle-title {
+    font-size: clamp(1.2rem, 5vw, 1.8rem);
+    margin-bottom: 8px;
+  }
+  .idle-room-banner {
+    width: 100%;
+    padding: 10px 16px;
+  }
+  .room-banner-code {
+    font-size: clamp(2rem, 9vw, 3rem);
+    letter-spacing: 6px;
+  }
+  .room-banner-sub {
+    font-size: 0.8rem;
+  }
+  .cyber-qr-box img#idleQrImage {
+    width: min(150px, 45vw);
+    height: min(150px, 45vw);
+  }
+  .idle-tips {
+    gap: 6px;
+  }
+  .tip-pill {
+    font-size: 0.75rem;
+    padding: 4px 10px;
+  }
+  .top-overlay {
+    top: 10px;
+    left: 10px;
+    right: 10px;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .now-playing-card, .up-next-card {
+    max-width: 100%;
+    width: 100%;
+    padding: 8px 12px;
+  }
+  .now-playing-card {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .song-title {
+    font-size: 1rem;
+  }
+  .corner-qr {
+    bottom: 25px;
+    right: 10px;
+    padding: 4px;
+  }
+  .corner-qr img {
+    width: 42px;
+    height: 42px;
+  }
+  .bottom-bar {
+    padding: 8px 12px;
+    gap: 10px;
+  }
+  .time-display {
+    font-size: 0.95rem;
+    min-width: 90px;
+  }
+  .next-singer-alert {
+    max-width: 90%;
+    right: -100%;
+    padding: 10px 16px;
+  }
+  .next-singer-alert.active {
+    right: 5%;
+  }
+}
+
+/* Large 4K / TV Screens */
+@media (min-width: 2560px) {
+  .idle-title {
+    font-size: 4.5rem;
+  }
+  .room-banner-code {
+    font-size: 5.5rem;
+    letter-spacing: 16px;
+  }
+  .cyber-qr-box img#idleQrImage {
+    width: 260px;
+    height: 260px;
+  }
 }
 

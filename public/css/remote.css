@@ -1391,6 +1391,17 @@ body, html {
   background: rgba(6, 182, 212, 0.45);
 }
 
+.cyber-share-btn.tv-link-btn {
+  background: rgba(168, 85, 247, 0.2);
+  border-color: rgba(168, 85, 247, 0.5);
+  color: #c084fc;
+  text-decoration: none;
+}
+
+.cyber-share-btn.tv-link-btn:active {
+  background: rgba(168, 85, 247, 0.45);
+}
+
 /* Lucky Draw Button */
 .lucky-draw-wrapper {
   margin-bottom: 12px;
