@@ -16,6 +16,7 @@
     "express": "^5.3.0",
     "qrcode": "^1.5.4",
     "socket.io": "^4.8.4",
+    "socket.io-client": "^4.8.4",
     "yt-search": "^2.13.1"
   }
 }
