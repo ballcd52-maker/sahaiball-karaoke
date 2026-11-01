@@ -46,7 +46,13 @@ function getBaseUrl(req) {
 
 app.use(cors());
 app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'public'), {
+  maxAge: 0,
+  etag: false,
+  setHeaders: (res) => {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  }
+}));
 
 // Friendly URL Routes
 app.get('/remote', (req, res) => {
@@ -254,13 +260,13 @@ io.on('connection', (socket) => {
   // 1. DISPLAY SCREEN INITIALIZATION (TV / Projector)
   socket.on('display:init', ({ requestedRoom } = {}) => {
     let room = null;
-    if (requestedRoom && /^\d{4}$/.test(requestedRoom.trim())) {
-      room = getRoom(requestedRoom.trim());
-      if (!room) {
-        room = createRoom(requestedRoom.trim(), socket.id);
-      }
-    } else {
-      room = createRoom(null, socket.id);
+    const targetCode = (requestedRoom && /^\d{4}$/.test(requestedRoom.trim()))
+      ? requestedRoom.trim()
+      : '8999';
+
+    room = getRoom(targetCode);
+    if (!room) {
+      room = createRoom(targetCode, socket.id);
     }
 
     room.displaySocketId = socket.id;
@@ -658,10 +664,14 @@ io.on('connection', (socket) => {
   });
 
   socket.on('webrtc:ice_candidate', ({ candidate, targetSocketId }) => {
-    io.to(targetSocketId).emit('webrtc:ice_candidate', {
-      candidate,
-      senderSocketId: socket.id
-    });
+    const room = getRoom(socket.data.roomCode);
+    const destSocketId = targetSocketId || (room ? room.displaySocketId : null);
+    if (destSocketId) {
+      io.to(destSocketId).emit('webrtc:ice_candidate', {
+        candidate,
+        senderSocketId: socket.id
+      });
+    }
   });
 
   socket.on('mic:stop', () => {

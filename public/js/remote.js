@@ -250,6 +250,8 @@ if (urlRoom && /^\d{4}$/.test(urlRoom.trim())) {
   currentRoomCode = urlRoom.trim();
 } else if (savedRoom && /^\d{4}$/.test(savedRoom.trim())) {
   currentRoomCode = savedRoom.trim();
+} else {
+  currentRoomCode = '8999'; // Default to permanent room 8999
 }
 
 isHost = savedHost;
@@ -923,7 +925,7 @@ function escapeHtml(str) {
 }
 
 // =============================================================================
-// WebRTC Smartphone Wireless Microphone (Mobile Client Transmitter)
+// WebRTC Smartphone Wireless Microphone (Mobile Client Transmitter - Safari & Chrome Optimized)
 // =============================================================================
 let micStream = null;
 let micPeerConnection = null;
@@ -931,6 +933,7 @@ let isMicActive = false;
 let micAudioContext = null;
 let micAnalyser = null;
 let vuAnimationFrameId = null;
+let tvDisplaySocketId = null;
 
 const toggleMicBtn = document.getElementById('toggleMicBtn');
 const micStatusPill = document.getElementById('micStatusPill');
@@ -964,17 +967,22 @@ async function startMicStreaming() {
     if (micStatusPill) micStatusPill.textContent = '🟡 กำลังเชื่อมต่อ...';
     if (micBtnLabel) micBtnLabel.textContent = 'กำลังเชื่อมต่อ...';
 
-    // 1. Capture microphone audio (Optimized for singing dynamics)
-    micStream = await navigator.mediaDevices.getUserMedia({
-      audio: {
-        echoCancellation: true, // Prevents feedback loop from room speakers
-        noiseSuppression: false, // Keep vibrato & vocal dynamics intact
-        autoGainControl: true,
-        channelCount: 1,
-        sampleRate: 48000
-      },
-      video: false
-    });
+    // 1. Capture microphone audio with Safari / WebKit compatibility fallback
+    try {
+      micStream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: { ideal: true },
+          autoGainControl: { ideal: true }
+        },
+        video: false
+      });
+    } catch (conErr) {
+      console.warn('Advanced audio constraints rejected by Safari/iOS, falling back to basic audio', conErr);
+      micStream = await navigator.mediaDevices.getUserMedia({
+        audio: true,
+        video: false
+      });
+    }
 
     // 2. Initialize RTCPeerConnection
     micPeerConnection = new RTCPeerConnection({
@@ -992,7 +1000,7 @@ async function startMicStreaming() {
       if (e.candidate) {
         socket.emit('webrtc:ice_candidate', {
           candidate: e.candidate,
-          targetSocketId: null // Server routes to room.displaySocketId
+          targetSocketId: tvDisplaySocketId || null
         });
       }
     };
@@ -1010,11 +1018,8 @@ async function startMicStreaming() {
       }
     };
 
-    // 3. Create Offer
-    const offer = await micPeerConnection.createOffer({
-      offerToReceiveAudio: false,
-      offerToReceiveVideo: false
-    });
+    // 3. Create Offer (Standard Unified Plan compatible with iOS Safari & Android)
+    const offer = await micPeerConnection.createOffer();
     await micPeerConnection.setLocalDescription(offer);
 
     socket.emit('webrtc:offer', {
@@ -1080,7 +1085,8 @@ function stopMicStreaming() {
 }
 
 // Receive WebRTC Answer from TV
-socket.on('webrtc:answer', async ({ answer }) => {
+socket.on('webrtc:answer', async ({ answer, senderSocketId }) => {
+  if (senderSocketId) tvDisplaySocketId = senderSocketId;
   if (micPeerConnection && answer) {
     try {
       await micPeerConnection.setRemoteDescription(new RTCSessionDescription(answer));
@@ -1091,7 +1097,8 @@ socket.on('webrtc:answer', async ({ answer }) => {
 });
 
 // Receive ICE candidate from TV
-socket.on('webrtc:ice_candidate', async ({ candidate }) => {
+socket.on('webrtc:ice_candidate', async ({ candidate, senderSocketId }) => {
+  if (senderSocketId) tvDisplaySocketId = senderSocketId;
   if (micPeerConnection && candidate) {
     try {
       await micPeerConnection.addIceCandidate(new RTCIceCandidate(candidate));
@@ -1099,13 +1106,21 @@ socket.on('webrtc:ice_candidate', async ({ candidate }) => {
   }
 });
 
-// Real-time Local VU Meter via Web Audio API
+// Real-time Local VU Meter via Web Audio API (iOS Safari safe)
 function startLocalVuMeter(stream) {
   try {
-    micAudioContext = new (window.AudioContext || window.webkitAudioContext)();
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) return;
+
+    micAudioContext = new AudioContextClass();
+    if (micAudioContext.state === 'suspended') {
+      micAudioContext.resume().catch(() => {});
+    }
+
     const source = micAudioContext.createMediaStreamSource(stream);
     micAnalyser = micAudioContext.createAnalyser();
-    micAnalyser.fftSize = 256;
+    micAnalyser.fftSize = 128;
+    micAnalyser.smoothingTimeConstant = 0.5;
     source.connect(micAnalyser);
 
     const dataArray = new Uint8Array(micAnalyser.frequencyBinCount);
@@ -1119,7 +1134,7 @@ function startLocalVuMeter(stream) {
         sum += dataArray[i];
       }
       const avg = sum / dataArray.length;
-      const pct = Math.min(100, Math.round((avg / 128) * 100));
+      const pct = Math.min(100, Math.round((avg / 110) * 100));
 
       if (vuFill) vuFill.style.width = `${pct}%`;
       if (vuLevelVal) vuLevelVal.textContent = `${pct}%`;
@@ -1128,7 +1143,7 @@ function startLocalVuMeter(stream) {
     }
     updateVu();
   } catch (e) {
-    console.warn('VU meter initialization error:', e);
+    console.warn('VU meter initialization error (non-fatal):', e);
   }
 }
 

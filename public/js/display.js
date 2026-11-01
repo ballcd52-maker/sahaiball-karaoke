@@ -115,7 +115,7 @@ const topRoomCode = document.getElementById('topRoomCode');
 const cornerRoomCode = document.getElementById('cornerRoomCode');
 
 const urlParams = new URLSearchParams(window.location.search);
-let currentRoomCode = urlParams.get('room') || localStorage.getItem('ktv_display_room') || '';
+let currentRoomCode = urlParams.get('room') || localStorage.getItem('ktv_display_room') || '8999';
 
 function updateRoomDisplay(code) {
   if (!code) return;
@@ -272,6 +272,8 @@ function onYouTubeIframeAPIReady() {
       fs: 0,
       iv_load_policy: 3,
       cc_load_policy: 0,
+      cc_lang_pref: 'none',
+      hl: 'th',
       modestbranding: 1,
       rel: 0,
       enablejsapi: 1,
@@ -384,6 +386,12 @@ function startProgressTracker() {
     if (!player || !player.getCurrentTime) return;
     const cur = player.getCurrentTime() || 0;
     const dur = player.getDuration() || 0;
+
+    // Suppress late-loading automated YouTube subtitles during early playback
+    if (captionsDisabled && cur < 8) {
+      disableCaptions();
+    }
+
     if (dur > 0) {
       const pct = (cur / dur) * 100;
       progressBar.style.width = `${pct}%`;
@@ -1212,6 +1220,20 @@ socket.on('webrtc:offer', async ({ offer, senderSocketId, nickname }) => {
       const stream = e.streams[0];
       micEntry.stream = stream;
 
+      // WebRTC audio pipeline activation for WebKit (Safari) & Chromium:
+      // An attached HTMLAudioElement ensures the browser's RTP decoder starts feeding PCM data
+      try {
+        const audioWakeEl = document.createElement('audio');
+        audioWakeEl.autoplay = true;
+        audioWakeEl.playsInline = true;
+        audioWakeEl.muted = true;
+        audioWakeEl.srcObject = stream;
+        audioWakeEl.play().catch(() => {});
+        micEntry.audioWakeEl = audioWakeEl;
+      } catch (wakeErr) {
+        console.warn('Audio wake element fallback notice:', wakeErr);
+      }
+
       const ctx = getAudioContext();
       if (ctx.state === 'suspended') {
         ctx.resume();
@@ -1303,6 +1325,10 @@ function closeMicSession(senderSocketId) {
   const micEntry = activeMics.get(senderSocketId);
   if (micEntry) {
     try {
+      if (micEntry.audioWakeEl) {
+        micEntry.audioWakeEl.srcObject = null;
+        micEntry.audioWakeEl.remove();
+      }
       if (micEntry.pc) micEntry.pc.close();
       if (micEntry.sourceNode) micEntry.sourceNode.disconnect();
       if (micEntry.gainNode) micEntry.gainNode.disconnect();

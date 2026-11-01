@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;600;700&family=Prompt:wght@400;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/display.css">
+  <link rel="stylesheet" href="/css/display.css?v=2.1">
   <script src="/socket.io/socket.io.js"></script>
 </head>
 <body>
@@ -67,22 +67,26 @@
         
         <h1 class="idle-title">พร้อมเปิดเวทีร้องเพลงแล้ว!</h1>
         
-        <!-- Big 4-Digit Room Code Banner -->
-        <div class="idle-room-banner">
-          <div class="room-banner-label">🔑 รหัสห้องร้องเพลง 4 หลัก</div>
-          <div class="room-banner-code" id="idleRoomCodeDigits">----</div>
-          <div class="room-banner-sub">บอกรหัส 4 หลักนี้ให้เพื่อน หรือใช้กล้องมือถือสแกน QR Code ด้านล่างเพื่อขอเพลงได้พร้อมกัน!</div>
-        </div>
+        <!-- Hero Grid: Room Code & QR Code side-by-side on TV/Landscape, stacked on Mobile -->
+        <div class="idle-hero-grid">
+          <!-- Big 4-Digit Room Code Banner -->
+          <div class="idle-room-banner">
+            <div class="room-banner-label">🔑 รหัสห้องร้องเพลง 4 หลัก</div>
+            <div class="room-banner-code" id="idleRoomCodeDigits">8999</div>
+            <div class="room-banner-sub">บอกรหัส 4 หลักนี้ให้เพื่อน หรือสแกน QR Code ด้านข้างเพื่อขอเพลงได้พร้อมกัน!</div>
+          </div>
 
-        <div class="qr-box cyber-qr-box">
-          <div class="qr-corner-tl"></div>
-          <div class="qr-corner-tr"></div>
-          <div class="qr-corner-bl"></div>
-          <div class="qr-corner-br"></div>
-          <img id="idleQrImage" src="" alt="Scan QR Code to Order Songs">
-          <div class="qr-label">
-            <span class="pulse-dot"></span>
-            <span id="idleQrUrl">สแกนเพื่อสั่งเพลง</span>
+          <!-- QR Code Box -->
+          <div class="qr-box cyber-qr-box">
+            <div class="qr-corner-tl"></div>
+            <div class="qr-corner-tr"></div>
+            <div class="qr-corner-bl"></div>
+            <div class="qr-corner-br"></div>
+            <img id="idleQrImage" src="" alt="Scan QR Code to Order Songs">
+            <div class="qr-label">
+              <span class="pulse-dot"></span>
+              <span id="idleQrUrl">สแกนเพื่อสั่งเพลง</span>
+            </div>
           </div>
         </div>
 
@@ -211,6 +215,6 @@
   </div>
 
   <script src="https://www.youtube.com/iframe_api"></script>
-  <script src="/js/display.js"></script>
+  <script src="/js/display.js?v=2.1"></script>
 </body>
 </html>

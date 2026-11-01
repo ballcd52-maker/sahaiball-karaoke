@@ -110,7 +110,7 @@
           <h3>หน้าจอทีวี (TV Screen)</h3>
           <p>เปิดหน้าต่างนี้ แล้วกด <strong>F11 เต็มจอ</strong> บนทีวี Sony หรือลากไปไว้ที่หน้าจอที่ 2 ของคอม แสดงเฉพาะ MV คิวถัดไป และข้อความเชียร์</p>
         </div>
-        <a href="/display.html" target="_blank" class="btn btn-tv">เปิดหน้าจอทีวี ↗</a>
+        <a href="/display.html?room=8999" target="_blank" class="btn btn-tv">เปิดหน้าจอทีวี (ห้อง 8999) ↗</a>
       </div>
 
       <!-- Card 2: Mobile Remote -->
@@ -120,14 +120,14 @@
           <h3>หน้ารีโมทมือถือ (Remote)</h3>
           <p>เปิดบนโทรศัพท์มือถือ หรือเปิดในอีกแท็บของคอม เพื่อค้นหาเพลง จัดคิวเพลง ควบคุมการเล่นเพลง และสลับเสียงร้อง</p>
         </div>
-        <a href="/remote.html" target="_blank" class="btn btn-remote">เปิดหน้ารีโมท ↗</a>
+        <a href="/remote.html?room=8999" target="_blank" class="btn btn-remote">เปิดหน้ารีโมท (ห้อง 8999) ↗</a>
       </div>
     </div>
 
     <!-- QR Code Section -->
     <div class="qr-section">
-      <h3>📲 สแกน QR Code ด้วยมือถือเพื่อสั่งเพลง</h3>
-      <p>เชื่อมต่อ Wi-Fi วงเดียวกัน แล้วเปิดกล้องสแกนเพื่อเข้าระบบได้ทันที</p>
+      <h3>📲 สแกน QR Code ด้วยมือถือเพื่อสั่งเพลง (ห้อง 8999)</h3>
+      <p>เชื่อมต่อ Wi-Fi แล้วเปิดกล้องสแกนเพื่อเข้าระบบห้อง 8999 ได้ทันที</p>
       <img id="qrImg" class="qr-img" src="" alt="QR Code">
       <div id="qrUrlText" class="qr-url">กำลังโหลด IP...</div>
     </div>
@@ -155,7 +155,7 @@
 
   <script>
     const origin = window.location.origin;
-    const remoteUrl = `${origin}/remote`;
+    const remoteUrl = `${origin}/remote?room=8999`;
     document.getElementById('qrImg').src = `/api/qr?url=${encodeURIComponent(remoteUrl)}`;
     document.getElementById('qrUrlText').textContent = remoteUrl;
   </script>

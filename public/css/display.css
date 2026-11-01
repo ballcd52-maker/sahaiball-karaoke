@@ -56,15 +56,16 @@ body, html {
   position: absolute;
   top: 0;
   left: 0;
-  width: 100%;
-  height: 100%;
+  width: 100vw;
+  height: 100vh;
   z-index: 10;
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
-  overflow-x: hidden;
+  justify-content: center;
+  align-items: center;
+  overflow: hidden;
   box-sizing: border-box;
-  padding: env(safe-area-inset-top, 8px) env(safe-area-inset-right, 12px) env(safe-area-inset-bottom, 8px) env(safe-area-inset-left, 12px);
+  padding: clamp(6px, 1.5vh, 18px) clamp(10px, 2vw, 24px);
   background: radial-gradient(ellipse at 50% 40%, #201335 0%, #0d0a1a 60%, #06050b 100%);
   opacity: 0;
   pointer-events: none;
@@ -98,12 +99,15 @@ body, html {
   z-index: 2;
   text-align: center;
   width: 100%;
-  max-width: 900px;
-  margin: auto; /* Vertically and horizontally centers when space permits; avoids clipping top on small viewports */
-  padding: clamp(6px, 1.2vh, 18px) clamp(10px, 2vw, 24px);
+  max-width: 980px;
+  max-height: 100vh;
+  margin: 0 auto;
+  padding: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
+  gap: clamp(4px, 1.1vh, 12px);
   box-sizing: border-box;
 }
 
@@ -122,14 +126,26 @@ body, html {
 }
 
 .idle-title {
-  font-size: clamp(1.2rem, 3.4vh, 2.6rem);
+  font-size: clamp(1.15rem, 3.2vh, 2.2rem);
   font-weight: 700;
   background: linear-gradient(135deg, #fff 30%, #a855f7 70%, #38bdf8 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
-  margin-bottom: clamp(4px, 1vh, 10px);
+  margin: 0;
   text-shadow: 0 8px 24px rgba(168, 85, 247, 0.3);
   line-height: 1.15;
+}
+
+/* Idle Hero Grid: Room Code & QR Code side-by-side in landscape / TV */
+.idle-hero-grid {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  justify-content: center;
+  gap: clamp(12px, 2vw, 24px);
+  width: 100%;
+  max-width: 860px;
+  margin: clamp(2px, 0.5vh, 6px) 0;
 }
 
 .idle-subtitle {
@@ -141,12 +157,13 @@ body, html {
 
 .qr-box {
   background: #ffffff;
-  padding: clamp(8px, 1.5vh, 16px);
-  border-radius: clamp(14px, 2vh, 20px);
+  padding: clamp(6px, 1.2vh, 14px);
+  border-radius: clamp(12px, 1.8vh, 18px);
   box-shadow: 0 15px 40px rgba(0, 0, 0, 0.6), 0 0 30px rgba(168, 85, 247, 0.3);
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   transition: transform 0.3s ease;
   box-sizing: border-box;
 }
@@ -156,18 +173,18 @@ body, html {
 }
 
 .qr-box img {
-  width: clamp(90px, 16vh, 175px);
-  height: clamp(90px, 16vh, 175px);
+  width: clamp(80px, 16vh, 145px);
+  height: clamp(80px, 16vh, 145px);
   display: block;
   object-fit: contain;
 }
 
 .qr-label {
-  margin-top: clamp(4px, 0.8vh, 8px);
+  margin-top: clamp(3px, 0.6vh, 6px);
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: clamp(0.65rem, 1.3vh, 0.85rem);
+  font-size: clamp(0.62rem, 1.2vh, 0.78rem);
   color: #c084fc;
   font-weight: 500;
   max-width: 90vw;
@@ -818,11 +835,15 @@ body, html {
   background: linear-gradient(135deg, rgba(234, 179, 8, 0.12) 0%, rgba(168, 85, 247, 0.15) 100%);
   border: 2px solid rgba(250, 204, 21, 0.6);
   border-radius: clamp(12px, 1.8vh, 18px);
-  padding: clamp(6px, 1.2vh, 12px) clamp(14px, 3vw, 28px);
-  margin-bottom: clamp(6px, 1.2vh, 14px);
+  padding: clamp(8px, 1.5vh, 16px) clamp(16px, 2.5vw, 32px);
+  margin: 0;
   text-align: center;
   box-shadow: 0 0 30px rgba(250, 204, 21, 0.2), 0 8px 24px rgba(0, 0, 0, 0.5);
-  max-width: 92%;
+  flex: 1 1 340px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
   box-sizing: border-box;
   cursor: pointer;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
@@ -834,7 +855,7 @@ body, html {
 }
 
 .room-banner-label {
-  font-size: clamp(0.75rem, 1.6vh, 0.95rem);
+  font-size: clamp(0.72rem, 1.5vh, 0.92rem);
   font-weight: 600;
   color: #fef08a;
   letter-spacing: 1px;
@@ -842,20 +863,20 @@ body, html {
 
 .room-banner-code {
   font-family: 'Kanit', monospace, sans-serif;
-  font-size: clamp(1.8rem, 5.2vh, 3.6rem);
+  font-size: clamp(2rem, 5.5vh, 3.8rem);
   font-weight: 800;
-  letter-spacing: clamp(6px, 1.2vw, 12px);
+  letter-spacing: clamp(6px, 1.5vw, 14px);
   color: #ffffff;
   text-shadow: 0 0 20px rgba(250, 204, 21, 0.8), 0 0 40px rgba(168, 85, 247, 0.6);
   line-height: 1.05;
-  margin: clamp(2px, 0.4vh, 4px) 0;
+  margin: clamp(2px, 0.5vh, 6px) 0;
 }
 
 .room-banner-sub {
-  font-size: clamp(0.68rem, 1.4vh, 0.9rem);
+  font-size: clamp(0.65rem, 1.3vh, 0.85rem);
   color: #cbd5e1;
   font-weight: 400;
-  line-height: 1.2;
+  line-height: 1.25;
 }
 
 .top-room-badge {
@@ -1112,78 +1133,123 @@ body, html {
    ========================================================================== */
 
 /* Very Short Displays (e.g. Android Emulators, 720p/540p landscape with high density, landscape phones) */
-@media (max-height: 540px) {
+@media (max-height: 560px) {
   .idle-content {
-    padding: 4px 10px;
+    padding: 0;
+    gap: 3px;
   }
   .idle-title {
-    font-size: clamp(1rem, 2.8vh, 1.6rem);
-    margin-bottom: 2px;
+    font-size: clamp(0.95rem, 2.6vh, 1.4rem);
+    margin: 0;
   }
-  .idle-tips {
-    display: none !important; /* Hide non-essential tips so Code & QR fit 100% without scrolling */
+  .idle-hero-grid {
+    gap: 10px;
+    margin: 2px 0;
   }
   .idle-room-banner {
     padding: 4px 12px;
-    margin-bottom: 4px;
   }
   .room-banner-label {
-    font-size: 0.72rem;
+    font-size: 0.7rem;
   }
   .room-banner-code {
-    font-size: clamp(1.4rem, 4.5vh, 2.2rem);
-    letter-spacing: 5px;
+    font-size: clamp(1.5rem, 4.8vh, 2.2rem);
+    letter-spacing: 4px;
     margin: 1px 0;
   }
   .room-banner-sub {
-    font-size: 0.65rem;
+    font-size: 0.62rem;
   }
   .cyber-qr-box {
-    padding: 5px;
+    padding: 4px;
   }
   .cyber-qr-box img#idleQrImage {
-    width: clamp(75px, 14vh, 115px);
-    height: clamp(75px, 14vh, 115px);
+    width: clamp(70px, 14vh, 100px);
+    height: clamp(70px, 14vh, 100px);
   }
   .qr-label {
-    font-size: 0.65rem;
-    margin-top: 3px;
+    font-size: 0.62rem;
+    margin-top: 2px;
   }
   .cyber-hud-top {
-    margin-bottom: 4px;
-    gap: 5px;
+    margin-bottom: 2px;
+    gap: 4px;
+  }
+  .brand-badge, .hud-room-badge, .hud-users-badge, .hud-remote-switch-btn, .cyber-clock-box {
+    padding: 2px 8px;
+    font-size: 0.72rem;
+  }
+  .idle-tips {
+    gap: 4px;
+    margin-top: 2px;
+  }
+  .tip-pill {
+    font-size: 0.68rem;
+    padding: 2px 8px;
   }
   .top-overlay {
-    top: 8px;
-    left: 12px;
-    right: 12px;
+    top: 6px;
+    left: 10px;
+    right: 10px;
   }
   .now-playing-card {
-    padding: 4px 10px;
-    gap: 8px;
+    padding: 4px 8px;
+    gap: 6px;
   }
   .song-title {
-    font-size: 0.95rem;
+    font-size: 0.88rem;
   }
   .up-next-card {
-    padding: 4px 10px;
+    padding: 4px 8px;
   }
   .corner-qr {
-    bottom: 18px;
-    right: 12px;
+    bottom: 16px;
+    right: 10px;
     padding: 3px;
   }
   .corner-qr img {
-    width: 42px;
-    height: 42px;
+    width: 38px;
+    height: 38px;
   }
   .bottom-bar {
-    padding: 6px 14px;
+    padding: 4px 12px;
   }
 }
 
 /* Mobile Portrait Mode / Narrow Displays (Phones & Narrow Browser Windows) */
-@media (max-width: 768px), (max-aspect-ratio: 1/1) {
+@media (max-width: 680px), (orientation: portrait) {
+  .idle-screen {
+    justify-content: flex-start;
+    overflow-y: auto;
+    padding: 12px 10px 24px;
+  }
+  .idle-content {
+    margin: 0 auto;
+    justify-content: flex-start;
+    gap: 10px;
+  }
+  .idle-hero-grid {
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+  }
+  .idle-room-banner {
+    width: 100%;
+    max-width: 360px;
+    padding: 10px 14px;
+  }
+  .room-banner-code {
+    font-size: clamp(2rem, 9vw, 3rem);
+    letter-spacing: 6px;
+  }
+  .room-banner-sub {
+    font-size: 0.78rem;
+  }
+  .cyber-qr-box img#idleQrImage {
+    width: min(140px, 42vw);
+    height: min(140px, 42vw);
+  }
   .cyber-hud-top {
     justify-content: center;
     gap: 6px;
@@ -1206,7 +1272,7 @@ body, html {
   }
   .idle-title {
     font-size: clamp(1.2rem, 5vw, 1.8rem);
-    margin-bottom: 8px;
+    margin-bottom: 4px;
   }
   .idle-room-banner {
     width: 100%;
