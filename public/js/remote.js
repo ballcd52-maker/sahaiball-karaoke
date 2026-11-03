@@ -156,9 +156,20 @@ function hideRoomJoinModal() {
   }
 }
 
+// Persistent Client ID for Host Session Persistence across reloads
+let myClientId = localStorage.getItem('ktv_client_id');
+if (!myClientId) {
+  myClientId = 'c_' + Math.random().toString(36).substring(2, 9) + Date.now().toString(36);
+  localStorage.setItem('ktv_client_id', myClientId);
+}
+
 function joinRoom(roomCode, nickname, hostRequested, createIfMissing = false) {
-  if (!roomCode || !/^\d{4}$/.test(roomCode.trim())) {
+  if (roomCode && !/^\d{4}$/.test(roomCode.trim())) {
     showToast('⚠️ กรุณาใส่รหัสห้องเป็นตัวเลข 4 หลัก');
+    return;
+  }
+  if (!roomCode && !createIfMissing) {
+    showToast('⚠️ กรุณาใส่รหัสห้องเป็นตัวเลข 4 หลัก หรือกดปุ่มสุ่มสร้างห้อง');
     return;
   }
 
@@ -167,14 +178,15 @@ function joinRoom(roomCode, nickname, hostRequested, createIfMissing = false) {
   localStorage.setItem('ktv_nickname', myNickname);
 
   socket.emit('room:join', {
-    roomCode: roomCode.trim(),
+    roomCode: roomCode ? roomCode.trim() : null,
     nickname: cleanNick,
     isHost: Boolean(hostRequested),
-    createIfMissing: Boolean(createIfMissing)
+    createIfMissing: Boolean(createIfMissing),
+    clientId: myClientId
   }, (res) => {
     if (res && res.success) {
       currentRoomCode = res.roomCode;
-      isHost = res.isHost;
+      isHost = Boolean(res.isHost);
       allowGuestControls = Boolean(res.allowGuestControls);
 
       localStorage.setItem('ktv_room_code', currentRoomCode);
@@ -188,7 +200,11 @@ function joinRoom(roomCode, nickname, hostRequested, createIfMissing = false) {
 
       updateRoomUI();
       hideRoomJoinModal();
-      showToast(`🎉 เข้าร่วมห้อง #${currentRoomCode} เรียบร้อยแล้ว!`);
+      if (isHost) {
+        showToast(`👑 คุณคือหัวหน้าห้อง #${currentRoomCode} (คุมเพลงได้เต็มที่)`);
+      } else {
+        showToast(`🎉 เข้าร่วมห้อง #${currentRoomCode} ในฐานะสมาชิกเรียบร้อยแล้ว!`);
+      }
     } else {
       showToast(res ? res.message || res.error : 'ไม่สามารถเข้าร่วมห้องได้');
       showRoomJoinModal(roomCode);
@@ -243,23 +259,23 @@ function updateControlsPermissionUI() {
 // Check room on launch
 const urlParams = new URLSearchParams(window.location.search);
 const urlRoom = urlParams.get('room');
-const savedRoom = localStorage.getItem('ktv_room_code');
-const savedHost = localStorage.getItem('ktv_is_host') === 'true';
+const action = urlParams.get('action');
 
 if (urlRoom && /^\d{4}$/.test(urlRoom.trim())) {
   currentRoomCode = urlRoom.trim();
-} else if (savedRoom && /^\d{4}$/.test(savedRoom.trim())) {
-  currentRoomCode = savedRoom.trim();
 } else {
-  currentRoomCode = '8999'; // Default to permanent room 8999
+  currentRoomCode = '';
 }
 
-isHost = savedHost;
 updateRoomUI();
 
 socket.on('connect', () => {
   if (currentRoomCode) {
-    joinRoom(currentRoomCode, myNickname, isHost, false);
+    // Joining room from QR code or direct link
+    joinRoom(currentRoomCode, myNickname, false, false);
+  } else if (action === 'create') {
+    // Created room directly: randomize fresh 4-digit room code for the 1 Host!
+    joinRoom(null, myNickname, true, true);
   } else {
     showRoomJoinModal();
   }
@@ -280,7 +296,9 @@ if (btnCreateRoomSubmit) {
   btnCreateRoomSubmit.addEventListener('click', () => {
     const code = roomPinInput.value.trim();
     const nick = joinNicknameInput.value.trim() || myNickname;
-    joinRoom(code, nick, true, true);
+    // If custom 4 digits entered, use it; otherwise randomize brand new room!
+    const roomToCreate = (/^\d{4}$/.test(code)) ? code : null;
+    joinRoom(roomToCreate, nick, true, true);
   });
 }
 

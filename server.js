@@ -128,6 +128,7 @@ function createRoom(requestedCode = null, hostSocketId = null) {
   const room = {
     code,
     hostSocketId: hostSocketId || null,
+    hostClientId: null,
     displaySocketId: null,
     allowGuestControls: false, // By default only host can skip/pause/change settings
     currentSong: null,
@@ -260,17 +261,23 @@ io.on('connection', (socket) => {
   // 1. DISPLAY SCREEN INITIALIZATION (TV / Projector)
   socket.on('display:init', ({ requestedRoom } = {}) => {
     let room = null;
-    const targetCode = (requestedRoom && /^\d{4}$/.test(requestedRoom.trim()))
+    const cleanReq = (requestedRoom && /^\d{4}$/.test(requestedRoom.trim()))
       ? requestedRoom.trim()
-      : '8999';
+      : null;
 
-    room = getRoom(targetCode);
-    if (!room) {
-      room = createRoom(targetCode, socket.id);
+    if (cleanReq) {
+      room = getRoom(cleanReq);
+      if (!room) {
+        room = createRoom(cleanReq, null);
+      }
+    } else {
+      // Randomize a brand new 4-digit room code for fresh TV session
+      room = createRoom(null, null);
     }
 
     room.displaySocketId = socket.id;
-    if (!room.hostSocketId) room.hostSocketId = socket.id;
+    // Note: Do NOT set TV screen as mobile hostSocketId;
+    // this allows the 1st mobile remote connecting to naturally become the 1 Host (หัวหน้าห้อง 1 คน)!
     room.lastActivity = Date.now();
 
     // Leave any prior rooms
@@ -282,15 +289,15 @@ io.on('connection', (socket) => {
     socket.data = {
       roomCode: room.code,
       isDisplay: true,
-      isHost: true,
+      isHost: false,
       nickname: 'จอทีวี/โปรเจคเตอร์'
     };
 
-    console.log(`[DISPLAY INITIALIZED] Screen socket ${socket.id} joined room_${room.code}`);
+    console.log(`[DISPLAY INITIALIZED] Screen socket ${socket.id} joined room_${room.code} (Random Room)`);
 
     socket.emit('state:sync', {
       roomCode: room.code,
-      isHost: true,
+      isHost: false,
       allowGuestControls: room.allowGuestControls,
       currentSong: room.currentSong,
       songQueue: room.songQueue,
@@ -300,32 +307,30 @@ io.on('connection', (socket) => {
   });
 
   // 2. USER ROOM JOINING (Mobile / Remote)
-  socket.on('room:join', ({ roomCode, nickname, isHost, createIfMissing } = {}, callback) => {
-    if (!roomCode) {
-      if (typeof callback === 'function') callback({ success: false, error: 'รหัสห้องไม่ถูกต้อง' });
-      return;
-    }
+  socket.on('room:join', ({ roomCode, nickname, isHost, createIfMissing, clientId } = {}, callback) => {
+    let cleanCode = roomCode ? roomCode.toString().trim() : '';
+    let room = null;
 
-    const cleanCode = roomCode.toString().trim();
-    if (!/^\d{4}$/.test(cleanCode)) {
-      if (typeof callback === 'function') callback({ success: false, error: 'รหัสห้องต้องเป็นตัวเลข 4 หลัก' });
-      return;
-    }
-
-    let room = getRoom(cleanCode);
-    if (!room) {
-      if (createIfMissing || isHost) {
+    if (!cleanCode && createIfMissing) {
+      // Randomize a fresh 4-digit room code for the host creating a room
+      cleanCode = generate4DigitCode();
+      room = createRoom(cleanCode, socket.id);
+    } else if (cleanCode && /^\d{4}$/.test(cleanCode)) {
+      room = getRoom(cleanCode);
+      if (!room && (createIfMissing || isHost)) {
         room = createRoom(cleanCode, socket.id);
-      } else {
-        if (typeof callback === 'function') {
-          callback({
-            success: false,
-            error: 'not_found',
-            message: `ไม่พบห้องรหัส ${cleanCode} กรุณาตรวจสอบรหัส 4 หลักบนจอทีวี`
-          });
-        }
-        return;
       }
+    }
+
+    if (!room) {
+      if (typeof callback === 'function') {
+        callback({
+          success: false,
+          error: 'not_found',
+          message: cleanCode ? `ไม่พบห้องรหัส ${cleanCode} กรุณาตรวจสอบรหัส 4 หลักบนจอทีวี` : 'กรุณาใส่รหัสห้อง 4 หลัก หรือกดปุ่มสุ่มสร้างห้องใหม่'
+        });
+      }
+      return;
     }
 
     room.lastActivity = Date.now();
@@ -340,33 +345,42 @@ io.on('connection', (socket) => {
       socket.leave(`room_${socket.data.roomCode}`);
     }
 
-    // Determine host status
+    // STRICT 1 HOST PER ROOM RULE (หัวหน้าห้อง 1 คนเท่านั้น)
+    const clientKey = clientId || socket.id;
     let userIsHost = false;
-    if (isHost) {
-      // If no host assigned or this socket is the designated host
-      if (!room.hostSocketId || room.hostSocketId === socket.id || !room.users.has(room.hostSocketId)) {
-        room.hostSocketId = socket.id;
-        userIsHost = true;
-      } else {
-        userIsHost = true; // Allow co-hosting or verified host
-      }
-    } else if (!room.hostSocketId) {
-      // First person to join an empty room can become host
+
+    // Check if the room currently has an active host connected
+    const currentHostUser = room.hostSocketId ? room.users.get(room.hostSocketId) : null;
+    const hasActiveHost = Boolean(currentHostUser && io.sockets.sockets.get(room.hostSocketId));
+
+    if (room.hostClientId && room.hostClientId === clientKey) {
+      // The established host is reconnecting/refreshing!
       room.hostSocketId = socket.id;
       userIsHost = true;
+    } else if (!hasActiveHost) {
+      // No active host in this room -> this first user becomes the 1 Host!
+      room.hostSocketId = socket.id;
+      room.hostClientId = clientKey;
+      userIsHost = true;
+    } else {
+      // Room already has an active host -> this user joins as Member (ลูกห้อง)
+      userIsHost = false;
     }
 
-    const userNick = (nickname || (userIsHost ? 'หัวหน้าห้อง' : 'เพื่อนร่วมห้อง')).trim();
+    const defaultNick = userIsHost ? 'หัวหน้าห้อง' : `สมาชิก ${room.users.size + 1}`;
+    const userNick = (nickname || defaultNick).trim();
 
     socket.join(`room_${room.code}`);
     socket.data = {
       roomCode: room.code,
       isHost: userIsHost,
-      nickname: userNick
+      nickname: userNick,
+      clientId: clientKey
     };
 
     room.users.set(socket.id, {
       id: socket.id,
+      clientId: clientKey,
       nickname: userNick,
       isHost: userIsHost,
       joinedAt: Date.now()
@@ -706,15 +720,19 @@ io.on('connection', (socket) => {
         }
         room.users.delete(socket.id);
         if (room.hostSocketId === socket.id) {
-          // If host disconnected, promote first remaining user to host or wait
-          const firstUser = room.users.keys().next().value;
-          if (firstUser) {
-            room.hostSocketId = firstUser;
-            const promotedUser = room.users.get(firstUser);
-            if (promotedUser) promotedUser.isHost = true;
-            io.to(firstUser).emit('room:promoted_to_host');
+          // If host disconnected, promote first remaining user to host
+          const remainingUsers = Array.from(room.users.values());
+          if (remainingUsers.length > 0) {
+            const nextHost = remainingUsers[0];
+            room.hostSocketId = nextHost.id;
+            room.hostClientId = nextHost.clientId || nextHost.id;
+            nextHost.isHost = true;
+            io.to(nextHost.id).emit('room:promoted_to_host');
+            broadcastRoomUpdate(room.code, 'room:host_changed', { hostNickname: nextHost.nickname });
+            console.log(`[HOST PROMOTED] ${nextHost.nickname} is now the 1 Host of room_${room.code}`);
           } else {
             room.hostSocketId = null;
+            room.hostClientId = null;
           }
         }
         broadcastRoomUpdate(room.code, 'room:users_update', { users: getRoomUsersList(room) });

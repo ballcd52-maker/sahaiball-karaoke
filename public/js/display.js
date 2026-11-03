@@ -115,12 +115,17 @@ const topRoomCode = document.getElementById('topRoomCode');
 const cornerRoomCode = document.getElementById('cornerRoomCode');
 
 const urlParams = new URLSearchParams(window.location.search);
-let currentRoomCode = urlParams.get('room') || localStorage.getItem('ktv_display_room') || '8999';
+let currentRoomCode = urlParams.get('room') || '';
 
 function updateRoomDisplay(code) {
   if (!code) return;
   currentRoomCode = code;
-  localStorage.setItem('ktv_display_room', code);
+
+  // Update URL in browser address bar without reload so refresh keeps the same active room session
+  try {
+    const newUrl = `${window.location.pathname}?room=${code}`;
+    window.history.replaceState({ path: newUrl }, '', newUrl);
+  } catch (_) {}
 
   if (hudRoomCode) hudRoomCode.textContent = code;
   if (idleRoomCodeDigits) idleRoomCodeDigits.textContent = code;
@@ -136,14 +141,16 @@ function updateRoomDisplay(code) {
   if (hudRemoteSwitchBtn) hudRemoteSwitchBtn.href = currentRemoteUrl;
 }
 
-// Click to change room code manually (e.g. set to 8999)
+// Click to change room code or randomize new room
 const changeRoomHandler = () => {
-  const newCode = prompt('🔢 ใส่รหัสห้อง 4 หลักที่ต้องการ (เช่น 8999):', currentRoomCode || '8999');
-  if (newCode && /^\d{4}$/.test(newCode.trim())) {
-    const clean = newCode.trim();
-    localStorage.setItem('ktv_display_room', clean);
+  const newCode = prompt('🔢 ใส่รหัสห้อง 4 หลักที่ต้องการ (หรือปล่อยว่างแล้วกด OK เพื่อสุ่มห้องใหม่):', currentRoomCode || '');
+  if (newCode === null) return;
+  const clean = newCode.trim();
+  if (clean === '') {
+    window.location.href = window.location.pathname;
+  } else if (/^\d{4}$/.test(clean)) {
     window.location.search = `?room=${clean}`;
-  } else if (newCode) {
+  } else {
     alert('รหัสห้องต้องเป็นตัวเลข 4 หลักเท่านั้นครับ');
   }
 };
@@ -151,14 +158,14 @@ const changeRoomHandler = () => {
 const hudRoomBadgeEl = document.getElementById('hudRoomBadge');
 if (hudRoomBadgeEl) {
   hudRoomBadgeEl.style.cursor = 'pointer';
-  hudRoomBadgeEl.title = 'แตะเพื่อเปลี่ยนรหัสห้อง (เช่น 8999)';
+  hudRoomBadgeEl.title = 'แตะเพื่อเปลี่ยนรหัสห้อง หรือสุ่มห้องใหม่';
   hudRoomBadgeEl.addEventListener('click', changeRoomHandler);
 }
 
 const idleBannerEl = document.querySelector('.idle-room-banner');
 if (idleBannerEl) {
   idleBannerEl.style.cursor = 'pointer';
-  idleBannerEl.title = 'แตะเพื่อเปลี่ยนรหัสห้อง (เช่น 8999)';
+  idleBannerEl.title = 'แตะเพื่อเปลี่ยนรหัสห้อง หรือสุ่มห้องใหม่';
   idleBannerEl.addEventListener('click', changeRoomHandler);
 }
 

@@ -108,28 +108,41 @@
         <div>
           <div class="card-icon">📺</div>
           <h3>หน้าจอทีวี (TV Screen)</h3>
-          <p>เปิดหน้าต่างนี้ แล้วกด <strong>F11 เต็มจอ</strong> บนทีวี Sony หรือลากไปไว้ที่หน้าจอที่ 2 ของคอม แสดงเฉพาะ MV คิวถัดไป และข้อความเชียร์</p>
+          <p>เปิดหน้าต่างนี้บน Smart TV หรือคอมพิวเตอร์ ระบบจะ<strong>สุ่มเลขห้อง 4 หลักใหม่</strong> พร้อมแสดง QR Code บนจอทันที</p>
         </div>
-        <a href="/display.html?room=8999" target="_blank" class="btn btn-tv">เปิดหน้าจอทีวี (ห้อง 8999) ↗</a>
+        <a href="/display.html" target="_blank" class="btn btn-tv">เปิดหน้าจอทีวี (สุ่มห้องใหม่) ↗</a>
       </div>
 
-      <!-- Card 2: Mobile Remote -->
+      <!-- Card 2: Mobile Remote (Host) -->
+      <div class="card">
+        <div>
+          <div class="card-icon">👑</div>
+          <h3>สร้างห้องใหม่ (หัวหน้าห้อง)</h3>
+          <p>สุ่มเลขห้อง 4 หลักใหม่ทันที พร้อมเป็น<strong>หัวหน้าห้อง (Host) คนแรก</strong> คุมคิวเพลง ข้ามเพลง และส่งต่อให้เพื่อน</p>
+        </div>
+        <a href="/remote?action=create" target="_blank" class="btn btn-remote">สร้างห้องใหม่ (เป็นหัวหน้าห้อง 👑) ↗</a>
+      </div>
+
+      <!-- Card 3: Join Existing Room -->
       <div class="card">
         <div>
           <div class="card-icon">📱</div>
-          <h3>หน้ารีโมทมือถือ (Remote)</h3>
-          <p>เปิดบนโทรศัพท์มือถือ หรือเปิดในอีกแท็บของคอม เพื่อค้นหาเพลง จัดคิวเพลง ควบคุมการเล่นเพลง และสลับเสียงร้อง</p>
+          <h3>เข้าร่วมห้อง (ใส่รหัส 4 หลัก)</h3>
+          <p>ดูรหัสห้อง 4 หลักที่แสดงอยู่บนหน้าจอทีวี แล้วใส่รหัสที่นี่เพื่อขอเพลงและเชียร์เพื่อนในห้อง</p>
+          <div style="display: flex; gap: 8px; margin-top: 10px;">
+            <input type="text" id="directPinInput" placeholder="รหัส 4 หลัก เช่น 5829" maxlength="4" style="flex: 1; padding: 10px 14px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.4); color: #fff; font-size: 1rem; text-align: center; letter-spacing: 2px;">
+            <button type="button" onclick="const p=document.getElementById('directPinInput').value.trim(); if(/^\d{4}$/.test(p)) window.location.href='/remote?room='+p; else alert('กรุณาใส่รหัสห้องเป็นตัวเลข 4 หลักครับ');" class="btn btn-remote" style="padding: 10px 16px; white-space: nowrap;">เข้าห้อง ↗</button>
+          </div>
         </div>
-        <a href="/remote.html?room=8999" target="_blank" class="btn btn-remote">เปิดหน้ารีโมท (ห้อง 8999) ↗</a>
       </div>
     </div>
 
     <!-- QR Code Section -->
     <div class="qr-section">
-      <h3>📲 สแกน QR Code ด้วยมือถือเพื่อสั่งเพลง (ห้อง 8999)</h3>
-      <p>เชื่อมต่อ Wi-Fi แล้วเปิดกล้องสแกนเพื่อเข้าระบบห้อง 8999 ได้ทันที</p>
+      <h3>📲 เข้าสู่ระบบรีโมทสั่งเพลงผ่านมือถือ</h3>
+      <p>สแกน QR Code นี้เพื่อเปิดหน้ารีโมทบนโทรศัพท์มือถือได้ทันที</p>
       <img id="qrImg" class="qr-img" src="" alt="QR Code">
-      <div id="qrUrlText" class="qr-url">กำลังโหลด IP...</div>
+      <div id="qrUrlText" class="qr-url">กำลังโหลด URL...</div>
     </div>
 
     <!-- Key Features -->
@@ -155,7 +168,7 @@
 
   <script>
     const origin = window.location.origin;
-    const remoteUrl = `${origin}/remote?room=8999`;
+    const remoteUrl = `${origin}/remote`;
     document.getElementById('qrImg').src = `/api/qr?url=${encodeURIComponent(remoteUrl)}`;
     document.getElementById('qrUrlText').textContent = remoteUrl;
   </script>
