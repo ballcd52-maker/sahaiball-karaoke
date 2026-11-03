@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
-  <link rel="stylesheet" href="/css/remote.css?v=2.2">
+  <link rel="stylesheet" href="/css/remote.css?v=2.3">
   <script src="/socket.io/socket.io.js"></script>
 </head>
 <body>
@@ -303,32 +303,65 @@
             </div>
           </div>
 
-          <!-- Vocal Cut & Mode Switch -->
+          <!-- Live Vocal FX & Pitch Presets -->
+          <div class="vocal-card fx-card" id="vocalFxCard">
+            <div class="card-title-row">
+              <div class="title-with-badge">
+                <h3>🎛️ เอฟเฟกต์แปลงเสียงไมค์สด (Live Vocal FX)</h3>
+                <span class="badge-tag">เรียลไทม์บนทีวี</span>
+              </div>
+              <span id="currentFxPill" class="fx-active-pill">🎤 สตูดิโอปกติ</span>
+            </div>
+            <p class="card-desc">เลือกเปลี่ยนโทนเสียงร้องไมค์มือถือของคุณแบบสดๆ ออกลำโพงทีวีทันที!</p>
+
+            <!-- Preset Buttons Grid -->
+            <div class="vocal-fx-grid">
+              <button class="vocal-fx-btn active" data-preset="natural" data-pitch="0" type="button">
+                <span class="fx-icon">🎤</span>
+                <span class="fx-name">สตูดิโอปกติ</span>
+                <span class="fx-desc">เสียงธรรมชาติ + เอคโค่</span>
+              </button>
+              <button class="vocal-fx-btn" data-preset="chipmunk" data-pitch="4" type="button">
+                <span class="fx-icon">🐿️</span>
+                <span class="fx-name">ชิปมังก์</span>
+                <span class="fx-desc">เสียงเด็กแหลมใส (+4)</span>
+              </button>
+              <button class="vocal-fx-btn" data-preset="deep" data-pitch="-4" type="button">
+                <span class="fx-icon">🦍</span>
+                <span class="fx-name">เสียงทุ้มหล่อ</span>
+                <span class="fx-desc">ทุ้มมาเฟียดุดัน (-4)</span>
+              </button>
+              <button class="vocal-fx-btn" data-preset="robot" data-pitch="0" type="button">
+                <span class="fx-icon">🤖</span>
+                <span class="fx-name">หุ่นยนต์</span>
+                <span class="fx-desc">ไซบอร์ก Sci-Fi</span>
+              </button>
+              <button class="vocal-fx-btn" data-preset="megaphone" data-pitch="0" type="button">
+                <span class="fx-icon">📢</span>
+                <span class="fx-name">โทรโข่ง</span>
+                <span class="fx-desc">วิทยุสื่อสาร</span>
+              </button>
+            </div>
+
+            <!-- Fine-tuning Vocal Pitch -->
+            <div class="vocal-pitch-row">
+              <div class="pitch-label-box">
+                <span class="pitch-title">🎼 คีย์เสียงไมค์คนร้อง:</span>
+                <span id="vocalPitchVal" class="pitch-val-pill">0 (มาตรฐาน)</span>
+              </div>
+              <div class="pitch-control-stepper">
+                <button id="vocalPitchDownBtn" class="stepper-btn" type="button" title="ลดคีย์เสียงร้อง">-1</button>
+                <button id="vocalPitchResetBtn" class="stepper-reset-btn" type="button" title="รีเซ็ตคีย์ปกติ">รีเซ็ต</button>
+                <button id="vocalPitchUpBtn" class="stepper-btn" type="button" title="เพิ่มคีย์เสียงร้อง">+1</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Auto Subtitles / CC Toggle Card -->
           <div class="vocal-card">
-            <h3>🎙️ ระบบสลับและตัดเสียงร้อง</h3>
-            <p class="card-desc">เลือกวิธีปรับแต่งเสียงร้องสำหรับเพลงที่กำลังเล่น</p>
-
+            <h3>💬 คำบรรยายและซับไตเติลบนจอ</h3>
             <div class="vocal-buttons">
-              <!-- Smart Video Swap -->
-              <button id="vocalSwapBtn" class="vocal-action-btn">
-                <div class="btn-icon">⚡</div>
-                <div class="btn-text">
-                  <strong>สลับเป็นเวอร์ชันดนตรี (Karaoke Swap)</strong>
-                  <span>สลับคลิปเป็นเวอร์ชันคาราโอเกะ/ดนตรีทันที</span>
-                </div>
-              </button>
-
-              <!-- Software Vocal Suppression / Channel Cut -->
-              <button id="vocalCutBtn" class="vocal-action-btn">
-                <div class="btn-icon">✂️</div>
-                <div class="btn-text">
-                  <strong id="vocalCutTitle">ตัดเสียงร้อง (Vocal Suppression)</strong>
-                  <span id="vocalCutDesc">ลดเสียงร้องแชนเนลตรงกลาง / สเตอริโอ</span>
-                </div>
-              </button>
-
-              <!-- Auto Subtitles / CC Toggle -->
-              <button id="toggleCcBtn" class="vocal-action-btn">
+              <button id="toggleCcBtn" class="vocal-action-btn" type="button">
                 <div class="btn-icon">💬</div>
                 <div class="btn-text">
                   <strong id="toggleCcTitle">คำบรรยาย/ซับไตเติล: ปิดอยู่ (ภาพคลีน)</strong>
@@ -538,6 +571,6 @@
     <div id="toast" class="toast-popup"></div>
   </div>
 
-  <script src="/js/remote.js?v=2.2"></script>
+  <script src="/js/remote.js?v=2.3"></script>
 </body>
 </html>

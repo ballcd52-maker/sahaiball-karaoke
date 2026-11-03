@@ -142,7 +142,6 @@ function createRoom(requestedCode = null, hostSocketId = null) {
       sfxVolume: 100,
       speed: 1.0,
       keyShift: 0,
-      isVocalCut: false,
       isBoosted: false
     },
     users: new Map(), // socketId -> { id, nickname, isHost, joinedAt }
@@ -585,41 +584,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // 10. VOCAL CUT & SMART VIDEO SWAP
-  socket.on('player:toggle_vocal', async (mode) => {
-    const room = getRoom(socket.data.roomCode);
-    if (!room) return;
-
-    const canControl = socket.data.isHost || room.allowGuestControls;
-    if (!canControl) return;
-
-    room.lastActivity = Date.now();
-
-    if (mode === 'swap_video' && room.currentSong) {
-      try {
-        let cleanTitle = room.currentSong.title
-          .replace(/คาราโอเกะ|karaoke|official mv|official audio|lyrics|เนื้อเพลง/gi, '')
-          .trim();
-        const searchQ = `${cleanTitle} คาราโอเกะ ดนตรี`;
-        const res = await yts(searchQ);
-        if (res.videos && res.videos.length > 0) {
-          const altSong = res.videos[0];
-          room.currentSong.originalVideoId = room.currentSong.originalVideoId || room.currentSong.videoId;
-          room.currentSong.videoId = altSong.videoId;
-          room.currentSong.isSwappedToKaraoke = !room.currentSong.isSwappedToKaraoke;
-          broadcastRoomUpdate(room.code, 'tv:command', { action: 'load_video', videoId: room.currentSong.videoId });
-          broadcastRoomUpdate(room.code, 'queue:update', { songQueue: room.songQueue, currentSong: room.currentSong });
-        }
-      } catch (e) {
-        console.error('Failed to swap video:', e);
-      }
-    } else {
-      room.playerState.isVocalCut = !room.playerState.isVocalCut;
-      broadcastRoomUpdate(room.code, 'tv:command', { action: 'toggle_vocal', isVocalCut: room.playerState.isVocalCut });
-      broadcastRoomUpdate(room.code, 'player:state', room.playerState);
-    }
-  });
-
   // 11. SFX & JINGLES (Anyone in room can trigger)
   socket.on('sfx:play', (data) => {
     const room = getRoom(socket.data.roomCode);
@@ -706,7 +670,9 @@ io.on('connection', (socket) => {
     io.to(room.displaySocketId).emit('mic:control', {
       senderSocketId: socket.id,
       volume: data.volume,
-      echoEnabled: data.echoEnabled
+      echoEnabled: data.echoEnabled,
+      fxPreset: data.fxPreset,
+      pitch: data.pitch
     });
   });
 

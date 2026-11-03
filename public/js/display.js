@@ -13,7 +13,6 @@ let player = null;
 let isPlayerReady = false;
 let currentVideoId = null;
 let progressTimer = null;
-let isVocalCut = false;
 let captionsDisabled = true; // Auto-captions disabled by default for clean MV and karaoke display
 let currentActiveSong = null;
 let scoreTimeout = null;
@@ -83,7 +82,8 @@ const boostBadge = document.getElementById('boostBadge');
 const topOverlay = document.getElementById('topOverlay');
 const nowPlayingTitle = document.getElementById('nowPlayingTitle');
 const requesterBadge = document.getElementById('requesterBadge');
-const vocalModeBadge = document.getElementById('vocalModeBadge');
+const vocalFxBadge = document.getElementById('vocalFxBadge');
+const vocalFxBadgeText = document.getElementById('vocalFxBadgeText');
 const keyBadge = document.getElementById('keyBadge');
 const speedBadge = document.getElementById('speedBadge');
 
@@ -529,10 +529,6 @@ socket.on('tv:command', (cmd) => {
     case 'seek':
       if (player.seekTo) player.seekTo(cmd.value);
       break;
-    case 'toggle_vocal':
-      isVocalCut = cmd.isVocalCut;
-      updateVocalBadge(isVocalCut);
-      break;
     case 'toggle_cc':
       captionsDisabled = !cmd.value;
       if (captionsDisabled) {
@@ -646,16 +642,6 @@ function updateQueueDisplay(songQueue, currentSong) {
   } else {
     upNextTitle.textContent = 'ยังไม่มีเพลงในคิว';
     upNextCard.style.opacity = '0.5';
-  }
-}
-
-function updateVocalBadge(isCut) {
-  if (isCut) {
-    vocalModeBadge.classList.add('vocal-cut');
-    vocalModeBadge.innerHTML = '<span>🎙️ ตัดเสียงร้อง / คาราโอเกะ</span>';
-  } else {
-    vocalModeBadge.classList.remove('vocal-cut');
-    vocalModeBadge.innerHTML = '<span>🔊 สเตอริโอปกติ</span>';
   }
 }
 
@@ -1140,9 +1126,348 @@ document.addEventListener('keydown', (e) => {
 });
 
 // =============================================================================
+// Live Vocal FX & Real-time Pitch Shifter Pipeline (Jungle Granular Algorithm)
+// =============================================================================
+function createFadeBuffer(context, activeTime, fadeTime) {
+  const length1 = Math.floor(activeTime * context.sampleRate);
+  const length2 = Math.floor((activeTime - 2 * fadeTime) * context.sampleRate);
+  const length = Math.max(1, length1 + length2);
+  const buffer = context.createBuffer(1, length, context.sampleRate);
+  const p = buffer.getChannelData(0);
+  const fadeLength = Math.floor(fadeTime * context.sampleRate);
+  const fadeIndex1 = fadeLength;
+  const fadeIndex2 = length1 - fadeLength;
+
+  for (let i = 0; i < length1; ++i) {
+    let value;
+    if (i < fadeIndex1) {
+      value = Math.sqrt(i / Math.max(1, fadeLength));
+    } else if (i >= fadeIndex2) {
+      value = Math.sqrt(1 - (i - fadeIndex2) / Math.max(1, fadeLength));
+    } else {
+      value = 1;
+    }
+    p[i] = value;
+  }
+  for (let i = length1; i < length; ++i) {
+    p[i] = 0;
+  }
+  return buffer;
+}
+
+function createDelayTimeBuffer(context, activeTime, fadeTime, shiftUp) {
+  const length1 = Math.floor(activeTime * context.sampleRate);
+  const length2 = Math.floor((activeTime - 2 * fadeTime) * context.sampleRate);
+  const length = Math.max(1, length1 + length2);
+  const buffer = context.createBuffer(1, length, context.sampleRate);
+  const p = buffer.getChannelData(0);
+
+  for (let i = 0; i < length1; ++i) {
+    p[i] = shiftUp ? (length1 - i) / length : i / Math.max(1, length1);
+  }
+  for (let i = length1; i < length; ++i) {
+    p[i] = 0;
+  }
+  return buffer;
+}
+
+class JunglePitchShifter {
+  constructor(context) {
+    this.context = context;
+    const delayTime = 0.100;
+    const fadeTime = 0.050;
+    const bufferTime = 0.100;
+
+    this.input = context.createGain();
+    this.output = context.createGain();
+
+    const mod1 = context.createBufferSource();
+    const mod2 = context.createBufferSource();
+    const mod3 = context.createBufferSource();
+    const mod4 = context.createBufferSource();
+
+    const shiftDownBuffer = createDelayTimeBuffer(context, bufferTime, fadeTime, false);
+    const shiftUpBuffer = createDelayTimeBuffer(context, bufferTime, fadeTime, true);
+
+    mod1.buffer = shiftDownBuffer;
+    mod2.buffer = shiftDownBuffer;
+    mod3.buffer = shiftUpBuffer;
+    mod4.buffer = shiftUpBuffer;
+
+    mod1.loop = true;
+    mod2.loop = true;
+    mod3.loop = true;
+    mod4.loop = true;
+
+    const mod1Gain = context.createGain();
+    const mod2Gain = context.createGain();
+    const mod3Gain = context.createGain();
+    mod3Gain.gain.setValueAtTime(0, context.currentTime);
+    const mod4Gain = context.createGain();
+    mod4Gain.gain.setValueAtTime(0, context.currentTime);
+
+    mod1.connect(mod1Gain);
+    mod2.connect(mod2Gain);
+    mod3.connect(mod3Gain);
+    mod4.connect(mod4Gain);
+
+    const modGain1 = context.createGain();
+    const modGain2 = context.createGain();
+
+    const delay1 = context.createDelay();
+    const delay2 = context.createDelay();
+
+    mod1Gain.connect(modGain1);
+    mod2Gain.connect(modGain2);
+    mod3Gain.connect(modGain1);
+    mod4Gain.connect(modGain2);
+
+    modGain1.connect(delay1.delayTime);
+    modGain2.connect(delay2.delayTime);
+
+    const fade1 = context.createBufferSource();
+    const fade2 = context.createBufferSource();
+    const fadeBuffer = createFadeBuffer(context, bufferTime, fadeTime);
+    fade1.buffer = fadeBuffer;
+    fade2.buffer = fadeBuffer;
+    fade1.loop = true;
+    fade2.loop = true;
+
+    const mix1 = context.createGain();
+    const mix2 = context.createGain();
+    mix1.gain.setValueAtTime(0, context.currentTime);
+    mix2.gain.setValueAtTime(0, context.currentTime);
+
+    fade1.connect(mix1.gain);
+    fade2.connect(mix2.gain);
+
+    this.input.connect(delay1);
+    this.input.connect(delay2);
+    delay1.connect(mix1);
+    delay2.connect(mix2);
+    mix1.connect(this.output);
+    mix2.connect(this.output);
+
+    const t = context.currentTime + 0.050;
+    const t2 = t + bufferTime - fadeTime;
+    mod1.start(t);
+    mod2.start(t2);
+    mod3.start(t);
+    mod4.start(t2);
+    fade1.start(t);
+    fade2.start(t2);
+
+    this.mod1 = mod1;
+    this.mod2 = mod2;
+    this.mod3 = mod3;
+    this.mod4 = mod4;
+    this.fade1 = fade1;
+    this.fade2 = fade2;
+    this.mod1Gain = mod1Gain;
+    this.mod2Gain = mod2Gain;
+    this.mod3Gain = mod3Gain;
+    this.mod4Gain = mod4Gain;
+    this.modGain1 = modGain1;
+    this.modGain2 = modGain2;
+    this.delayTime = delayTime;
+  }
+
+  setPitchOffset(mult) {
+    if (mult > 0) {
+      this.mod1Gain.gain.setValueAtTime(0, this.context.currentTime);
+      this.mod2Gain.gain.setValueAtTime(0, this.context.currentTime);
+      this.mod3Gain.gain.setValueAtTime(1, this.context.currentTime);
+      this.mod4Gain.gain.setValueAtTime(1, this.context.currentTime);
+    } else {
+      this.mod1Gain.gain.setValueAtTime(1, this.context.currentTime);
+      this.mod2Gain.gain.setValueAtTime(1, this.context.currentTime);
+      this.mod3Gain.gain.setValueAtTime(0, this.context.currentTime);
+      this.mod4Gain.gain.setValueAtTime(0, this.context.currentTime);
+    }
+    const d = 0.5 * this.delayTime * Math.abs(mult);
+    this.modGain1.gain.setTargetAtTime(d, this.context.currentTime, 0.010);
+    this.modGain2.gain.setTargetAtTime(d, this.context.currentTime, 0.010);
+  }
+
+  destroy() {
+    try {
+      this.mod1.stop();
+      this.mod2.stop();
+      this.mod3.stop();
+      this.mod4.stop();
+      this.fade1.stop();
+      this.fade2.stop();
+    } catch (e) {}
+  }
+}
+
+class VocalFXPipeline {
+  constructor(context, sourceNode) {
+    this.ctx = context;
+    this.source = sourceNode;
+
+    // Pitch Shifter and Clean Bypass Gain
+    this.jungle = new JunglePitchShifter(context);
+    this.cleanGain = context.createGain();
+    this.pitchWetGain = context.createGain();
+
+    // Default clean bypass active
+    this.cleanGain.gain.setValueAtTime(1.0, context.currentTime);
+    this.pitchWetGain.gain.setValueAtTime(0.0, context.currentTime);
+
+    this.source.connect(this.cleanGain);
+    this.source.connect(this.jungle.input);
+    this.jungle.output.connect(this.pitchWetGain);
+
+    // Sum pitch/clean into filter node
+    this.preFilterGain = context.createGain();
+    this.cleanGain.connect(this.preFilterGain);
+    this.pitchWetGain.connect(this.preFilterGain);
+
+    // Biquad Filter for Formant & Character shaping
+    this.filter = context.createBiquadFilter();
+    this.filter.type = 'allpass';
+    this.preFilterGain.connect(this.filter);
+
+    // Ring Modulator (for Robot voice)
+    this.robotGain = context.createGain();
+    this.robotGain.gain.setValueAtTime(1.0, context.currentTime);
+    this.filter.connect(this.robotGain);
+
+    this.robotOsc = context.createOscillator();
+    this.robotOsc.type = 'sawtooth';
+    this.robotOsc.frequency.setValueAtTime(55, context.currentTime); // 55Hz robotic hum
+    this.robotOscGain = context.createGain();
+    this.robotOscGain.gain.setValueAtTime(0.0, context.currentTime);
+    this.robotOsc.connect(this.robotOscGain);
+    this.robotOscGain.connect(this.robotGain.gain);
+    this.robotOsc.start();
+
+    // Studio Slapback Reverb & Echo
+    this.echoDelay = context.createDelay();
+    this.echoDelay.delayTime.setValueAtTime(0.16, context.currentTime); // 160ms slapback
+    this.echoFeedback = context.createGain();
+    this.echoFeedback.gain.setValueAtTime(0.26, context.currentTime); // 26% decay
+    this.echoDelay.connect(this.echoFeedback);
+    this.echoFeedback.connect(this.echoDelay);
+
+    this.dryGain = context.createGain();
+    this.dryGain.gain.setValueAtTime(0.85, context.currentTime);
+    this.wetGain = context.createGain();
+    this.wetGain.gain.setValueAtTime(0.35, context.currentTime);
+
+    this.robotGain.connect(this.dryGain);
+    this.robotGain.connect(this.echoDelay);
+    this.echoDelay.connect(this.wetGain);
+
+    // Master Output Gain for this Mic
+    this.masterGain = context.createGain();
+    this.masterGain.gain.setValueAtTime(1.2, context.currentTime);
+    this.dryGain.connect(this.masterGain);
+    this.wetGain.connect(this.masterGain);
+
+    // Connect to speakers
+    this.masterGain.connect(context.destination);
+
+    this.currentPreset = 'natural';
+    this.currentPitch = 0;
+    this.echoActive = true;
+  }
+
+  applyPreset(preset = 'natural', pitchOffset = 0) {
+    this.currentPreset = preset;
+    this.currentPitch = Number(pitchOffset) || 0;
+    const now = this.ctx.currentTime;
+
+    // Reset ring modulation
+    this.robotOscGain.gain.setValueAtTime(0.0, now);
+    this.robotGain.gain.setValueAtTime(1.0, now);
+
+    if (preset === 'chipmunk' || preset === 'deep' || this.currentPitch !== 0) {
+      // Engage granular pitch shifter
+      this.cleanGain.gain.setValueAtTime(0.0, now);
+      this.pitchWetGain.gain.setValueAtTime(1.0, now);
+
+      let effectiveSemitones = this.currentPitch;
+      if (preset === 'chipmunk' && effectiveSemitones === 0) effectiveSemitones = 4.5;
+      if (preset === 'deep' && effectiveSemitones === 0) effectiveSemitones = -4.0;
+
+      // Map semitones to jungle factor (-1 to +1 range)
+      const mult = Math.max(-1.0, Math.min(1.0, effectiveSemitones * 0.12));
+      this.jungle.setPitchOffset(mult);
+
+      if (preset === 'chipmunk' || effectiveSemitones > 0) {
+        // Highpass filter for extra crisp cartoon sound
+        this.filter.type = 'highpass';
+        this.filter.frequency.setValueAtTime(320, now);
+      } else {
+        // Low shelf for deep bass fullness
+        this.filter.type = 'lowshelf';
+        this.filter.frequency.setValueAtTime(220, now);
+        this.filter.gain.setValueAtTime(5.0, now);
+      }
+
+      this.wetGain.gain.setValueAtTime(this.echoActive ? 0.28 : 0.0, now);
+    } else if (preset === 'robot') {
+      // Clean pitch input, modulate with 55Hz carrier
+      this.cleanGain.gain.setValueAtTime(1.0, now);
+      this.pitchWetGain.gain.setValueAtTime(0.0, now);
+      this.filter.type = 'allpass';
+
+      // Ring Mod active
+      this.robotGain.gain.setValueAtTime(0.0, now);
+      this.robotOscGain.gain.setValueAtTime(0.85, now);
+      this.wetGain.gain.setValueAtTime(this.echoActive ? 0.35 : 0.0, now);
+    } else if (preset === 'megaphone') {
+      // Megaphone Bandpass filter (450Hz - 2.8kHz)
+      this.cleanGain.gain.setValueAtTime(1.0, now);
+      this.pitchWetGain.gain.setValueAtTime(0.0, now);
+      this.filter.type = 'bandpass';
+      this.filter.frequency.setValueAtTime(1250, now);
+      this.filter.Q.setValueAtTime(2.2, now);
+      this.wetGain.gain.setValueAtTime(this.echoActive ? 0.12 : 0.0, now);
+    } else {
+      // Natural Studio Voice
+      this.cleanGain.gain.setValueAtTime(1.0, now);
+      this.pitchWetGain.gain.setValueAtTime(0.0, now);
+      this.filter.type = 'allpass';
+      this.wetGain.gain.setValueAtTime(this.echoActive ? 0.35 : 0.0, now);
+    }
+  }
+
+  setVolume(volumePercent) {
+    const volFloat = Math.max(0, Math.min(2.0, volumePercent / 100));
+    this.masterGain.gain.setValueAtTime(volFloat, this.ctx.currentTime);
+  }
+
+  setEcho(enabled) {
+    this.echoActive = Boolean(enabled);
+    this.applyPreset(this.currentPreset, this.currentPitch);
+  }
+
+  destroy() {
+    try {
+      this.jungle.destroy();
+      this.robotOsc.stop();
+      this.source.disconnect();
+      this.cleanGain.disconnect();
+      this.pitchWetGain.disconnect();
+      this.preFilterGain.disconnect();
+      this.filter.disconnect();
+      this.robotGain.disconnect();
+      this.echoDelay.disconnect();
+      this.echoFeedback.disconnect();
+      this.dryGain.disconnect();
+      this.wetGain.disconnect();
+      this.masterGain.disconnect();
+    } catch (e) {}
+  }
+}
+
+// =============================================================================
 // WebRTC Wireless Smartphone Microphones Pipeline (TV Receiver)
 // =============================================================================
-const activeMics = new Map(); // senderSocketId -> { pc, stream, sourceNode, gainNode, wetGain, dryGain, nickname }
+const activeMics = new Map(); // senderSocketId -> { pc, stream, fxPipeline, nickname }
 
 function renderLiveMicsHud() {
   if (!liveMicsHud) return;
@@ -1166,6 +1491,39 @@ function renderLiveMicsHud() {
     liveMicsHud.appendChild(pill);
     micIndex++;
   });
+}
+
+function updateVocalFxBadge() {
+  if (!vocalFxBadge) return;
+  let activePreset = 'natural';
+  let activePitch = 0;
+
+  for (const [id, mic] of activeMics.entries()) {
+    if (mic.fxPipeline) {
+      if (mic.fxPipeline.currentPreset !== 'natural' || mic.fxPipeline.currentPitch !== 0) {
+        activePreset = mic.fxPipeline.currentPreset;
+        activePitch = mic.fxPipeline.currentPitch;
+        break;
+      }
+    }
+  }
+
+  if (activePreset === 'natural' && activePitch === 0) {
+    vocalFxBadge.style.display = 'none';
+  } else {
+    vocalFxBadge.style.display = 'inline-flex';
+    const presetLabels = {
+      chipmunk: '🐿️ ไมค์: ชิปมังก์',
+      deep: '🦍 ไมค์: เสียงทุ้มหล่อ',
+      robot: '🤖 ไมค์: ไซบอร์ก',
+      megaphone: '📢 ไมค์: โทรโข่ง'
+    };
+    let label = presetLabels[activePreset] || '✨ ไมค์เอฟเฟกต์';
+    if (activePitch !== 0 && activePreset === 'natural') {
+      label = `🎼 คีย์ไมค์: ${activePitch > 0 ? `+${activePitch}` : activePitch}`;
+    }
+    if (vocalFxBadgeText) vocalFxBadgeText.textContent = label;
+  }
 }
 
 function escapeHtml(str) {
@@ -1204,10 +1562,7 @@ socket.on('webrtc:offer', async ({ offer, senderSocketId, nickname }) => {
     const micEntry = {
       pc,
       stream: null,
-      sourceNode: null,
-      gainNode: null,
-      wetGain: null,
-      dryGain: null,
+      fxPipeline: null,
       nickname: nickname || 'นักร้อง'
     };
 
@@ -1228,7 +1583,6 @@ socket.on('webrtc:offer', async ({ offer, senderSocketId, nickname }) => {
       micEntry.stream = stream;
 
       // WebRTC audio pipeline activation for WebKit (Safari) & Chromium:
-      // An attached HTMLAudioElement ensures the browser's RTP decoder starts feeding PCM data
       try {
         const audioWakeEl = document.createElement('audio');
         audioWakeEl.autoplay = true;
@@ -1247,38 +1601,10 @@ socket.on('webrtc:offer', async ({ offer, senderSocketId, nickname }) => {
       }
 
       const source = ctx.createMediaStreamSource(stream);
-      const gainNode = ctx.createGain();
-      gainNode.gain.setValueAtTime(1.2, ctx.currentTime);
-
-      // Studio Slapback Reverb & Echo
-      const delay = ctx.createDelay();
-      delay.delayTime.setValueAtTime(0.16, ctx.currentTime); // 160ms
-      const feedback = ctx.createGain();
-      feedback.gain.setValueAtTime(0.26, ctx.currentTime); // 26% decay
-      delay.connect(feedback);
-      feedback.connect(delay);
-
-      const dryGain = ctx.createGain();
-      dryGain.gain.setValueAtTime(0.85, ctx.currentTime);
-      const wetGain = ctx.createGain();
-      wetGain.gain.setValueAtTime(0.35, ctx.currentTime);
-
-      source.connect(dryGain);
-      source.connect(delay);
-      delay.connect(wetGain);
-
-      dryGain.connect(gainNode);
-      wetGain.connect(gainNode);
-
-      // Output directly to TV Speakers / Soundbar
-      gainNode.connect(ctx.destination);
-
-      micEntry.sourceNode = source;
-      micEntry.gainNode = gainNode;
-      micEntry.wetGain = wetGain;
-      micEntry.dryGain = dryGain;
+      micEntry.fxPipeline = new VocalFXPipeline(ctx, source);
 
       renderLiveMicsHud();
+      updateVocalFxBadge();
       playKtvSFX('cheering');
     };
 
@@ -1314,17 +1640,22 @@ socket.on('mic:stop', ({ senderSocketId }) => {
   closeMicSession(senderSocketId);
 });
 
-socket.on('mic:control', ({ senderSocketId, volume, echoEnabled }) => {
+socket.on('mic:control', ({ senderSocketId, volume, echoEnabled, fxPreset, pitch }) => {
   const micEntry = activeMics.get(senderSocketId);
-  if (!micEntry) return;
+  if (!micEntry || !micEntry.fxPipeline) return;
 
-  const ctx = getAudioContext();
-  if (volume !== undefined && micEntry.gainNode) {
-    const volFloat = Math.max(0, Math.min(2.0, volume / 100));
-    micEntry.gainNode.gain.setValueAtTime(volFloat, ctx.currentTime);
+  if (volume !== undefined) {
+    micEntry.fxPipeline.setVolume(volume);
   }
-  if (echoEnabled !== undefined && micEntry.wetGain) {
-    micEntry.wetGain.gain.setValueAtTime(echoEnabled ? 0.35 : 0.0, ctx.currentTime);
+  if (echoEnabled !== undefined) {
+    micEntry.fxPipeline.setEcho(echoEnabled);
+  }
+  if (fxPreset !== undefined || pitch !== undefined) {
+    micEntry.fxPipeline.applyPreset(
+      fxPreset !== undefined ? fxPreset : micEntry.fxPipeline.currentPreset,
+      pitch !== undefined ? pitch : micEntry.fxPipeline.currentPitch
+    );
+    updateVocalFxBadge();
   }
 });
 
@@ -1337,10 +1668,10 @@ function closeMicSession(senderSocketId) {
         micEntry.audioWakeEl.remove();
       }
       if (micEntry.pc) micEntry.pc.close();
-      if (micEntry.sourceNode) micEntry.sourceNode.disconnect();
-      if (micEntry.gainNode) micEntry.gainNode.disconnect();
+      if (micEntry.fxPipeline) micEntry.fxPipeline.destroy();
     } catch (e) {}
     activeMics.delete(senderSocketId);
     renderLiveMicsHud();
+    updateVocalFxBadge();
   }
 }

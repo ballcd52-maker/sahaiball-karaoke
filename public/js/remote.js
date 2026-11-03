@@ -15,8 +15,7 @@ let playerState = {
   volume: 100,
   sfxVolume: 100,
   speed: 1.0,
-  keyShift: 0,
-  isVocalCut: false
+  keyShift: 0
 };
 let searchDebounceTimer = null;
 
@@ -99,14 +98,27 @@ const keyDisplayVal = document.getElementById('keyDisplayVal');
 const keyDescText = document.getElementById('keyDescText');
 const speedBtns = document.querySelectorAll('.speed-btn');
 
-// Vocal Buttons
-const vocalSwapBtn = document.getElementById('vocalSwapBtn');
-const vocalCutBtn = document.getElementById('vocalCutBtn');
-const vocalCutTitle = document.getElementById('vocalCutTitle');
-const vocalCutDesc = document.getElementById('vocalCutDesc');
+// Live Vocal FX & Pitch Controls
+const vocalFxBtns = document.querySelectorAll('.vocal-fx-btn');
+const currentFxPill = document.getElementById('currentFxPill');
+const vocalPitchDownBtn = document.getElementById('vocalPitchDownBtn');
+const vocalPitchUpBtn = document.getElementById('vocalPitchUpBtn');
+const vocalPitchResetBtn = document.getElementById('vocalPitchResetBtn');
+const vocalPitchVal = document.getElementById('vocalPitchVal');
 const toggleCcBtn = document.getElementById('toggleCcBtn');
 const toggleCcTitle = document.getElementById('toggleCcTitle');
 const toggleCcDesc = document.getElementById('toggleCcDesc');
+
+let currentVocalPreset = 'natural';
+let currentVocalPitch = 0; // -6 to +6 semitones
+
+const VOCAL_PRESETS = {
+  natural: { name: 'สตูดิโอปกติ', icon: '🎤' },
+  chipmunk: { name: 'ชิปมังก์', icon: '🐿️' },
+  deep: { name: 'เสียงทุ้มหล่อ', icon: '🦍' },
+  robot: { name: 'หุ่นยนต์', icon: '🤖' },
+  megaphone: { name: 'โทรโข่ง', icon: '📢' }
+};
 
 // Reactions & Soundboard Tab
 const sfxBtns = document.querySelectorAll('.sfx-btn');
@@ -525,16 +537,6 @@ function updateControlButtons() {
     }
   });
 
-  if (playerState.isVocalCut) {
-    vocalCutBtn.classList.add('active');
-    vocalCutTitle.textContent = 'คืนค่าเสียงร้องปกติ (Stereo)';
-    vocalCutDesc.textContent = 'กำลังเปิดโหมดตัดเสียงร้องอยู่ แตะเพื่อปิด';
-  } else {
-    vocalCutBtn.classList.remove('active');
-    vocalCutTitle.textContent = 'ตัดเสียงร้อง (Vocal Suppression)';
-    vocalCutDesc.textContent = 'ลดเสียงร้องแชนเนลตรงกลาง / สเตอริโอ';
-  }
-
   if (toggleCcBtn) {
     if (playerState.showCaptions) {
       toggleCcBtn.classList.add('active');
@@ -826,28 +828,79 @@ speedBtns.forEach(btn => {
   });
 });
 
-// Vocal Controls
-vocalCutBtn.addEventListener('click', () => {
-  if (!canControlPlayback()) {
-    showToast('👑 เฉพาะหัวหน้าห้องเท่านั้นที่สามารถเปิดตัดเสียงร้องได้');
-    return;
+// Live Vocal FX & Pitch Presets
+function sendMicControlSettings() {
+  const vol = micVolSlider ? parseInt(micVolSlider.value, 10) : 120;
+  const echo = micEchoToggle ? micEchoToggle.checked : true;
+  socket.emit('mic:control', {
+    volume: vol,
+    echoEnabled: echo,
+    fxPreset: currentVocalPreset,
+    pitch: currentVocalPitch
+  });
+}
+
+function updateVocalPitchDisplay() {
+  if (!vocalPitchVal) return;
+  if (currentVocalPitch === 0) {
+    vocalPitchVal.textContent = '0 (มาตรฐาน)';
+  } else if (currentVocalPitch > 0) {
+    vocalPitchVal.textContent = `+${currentVocalPitch} (เสียงสูง)`;
+  } else {
+    vocalPitchVal.textContent = `${currentVocalPitch} (เสียงทุ้ม)`;
   }
-  socket.emit('player:toggle_vocal', 'toggle');
-  showToast(playerState.isVocalCut ? '🔊 คืนค่าเสียงร้องปกติ (Stereo)' : '✂️ เปิดโหมดตัดเสียงร้อง');
+}
+
+vocalFxBtns.forEach(btn => {
+  btn.addEventListener('click', () => {
+    const preset = btn.dataset.preset;
+    currentVocalPreset = preset;
+
+    // Update active button styling
+    vocalFxBtns.forEach(b => b.classList.toggle('active', b === btn));
+
+    // If preset defines pitch, apply default pitch
+    const presetPitch = parseInt(btn.dataset.pitch, 10);
+    if (!isNaN(presetPitch)) {
+      currentVocalPitch = presetPitch;
+      updateVocalPitchDisplay();
+    }
+
+    if (currentFxPill && VOCAL_PRESETS[preset]) {
+      currentFxPill.textContent = `${VOCAL_PRESETS[preset].icon} ${VOCAL_PRESETS[preset].name}`;
+    }
+
+    sendMicControlSettings();
+    showToast(`✨ แปลงเสียงไมค์: ${VOCAL_PRESETS[preset] ? VOCAL_PRESETS[preset].name : preset}`);
+  });
 });
 
-vocalSwapBtn.addEventListener('click', () => {
-  if (!canControlPlayback()) {
-    showToast('👑 เฉพาะหัวหน้าห้องเท่านั้นที่สามารถสลับวิดีโอได้');
-    return;
-  }
-  if (!currentSong) {
-    showToast('ไม่มีเพลงที่กำลังเล่นอยู่');
-    return;
-  }
-  socket.emit('player:toggle_vocal', 'swap_video');
-  showToast('⚡ กำลังค้นหาและสลับเป็นเวอร์ชันดนตรีคาราโอเกะ...');
-});
+if (vocalPitchDownBtn) {
+  vocalPitchDownBtn.addEventListener('click', () => {
+    currentVocalPitch = Math.max(-6, currentVocalPitch - 1);
+    updateVocalPitchDisplay();
+    sendMicControlSettings();
+    showToast(`🎼 คีย์ไมค์: ${currentVocalPitch}`);
+  });
+}
+
+if (vocalPitchUpBtn) {
+  vocalPitchUpBtn.addEventListener('click', () => {
+    currentVocalPitch = Math.min(6, currentVocalPitch + 1);
+    updateVocalPitchDisplay();
+    sendMicControlSettings();
+    showToast(`🎼 คีย์ไมค์: +${currentVocalPitch}`);
+  });
+}
+
+if (vocalPitchResetBtn) {
+  vocalPitchResetBtn.addEventListener('click', () => {
+    currentVocalPitch = 0;
+    updateVocalPitchDisplay();
+    sendMicControlSettings();
+    showToast('🎼 รีเซ็ตคีย์ไมค์ปกติ (0)');
+  });
+}
 
 if (toggleCcBtn) {
   toggleCcBtn.addEventListener('click', () => {
@@ -1048,13 +1101,15 @@ async function startMicStreaming() {
     // 4. Start local VU Meter
     startLocalVuMeter(micStream);
 
-    // 5. Update UI
+    // 5. Update UI & Send initial FX settings
     isMicActive = true;
     if (toggleMicBtn) toggleMicBtn.classList.add('active');
     if (micIconGraphic) micIconGraphic.textContent = '🔴';
     if (micBtnLabel) micBtnLabel.textContent = 'แตะเพื่อปิดไมค์';
     if (micBtnSub) micBtnSub.textContent = 'กำลังส่งเสียงออกลำโพงทีวี';
     if (vuMeterBox) vuMeterBox.style.display = 'block';
+
+    sendMicControlSettings();
 
   } catch (err) {
     console.error('Failed to start microphone:', err);
@@ -1185,19 +1240,13 @@ if (micVolSlider) {
   micVolSlider.addEventListener('input', () => {
     const vol = parseInt(micVolSlider.value, 10);
     if (micVolVal) micVolVal.textContent = `${vol}%`;
-    socket.emit('mic:control', {
-      volume: vol,
-      echoEnabled: micEchoToggle ? micEchoToggle.checked : true
-    });
+    sendMicControlSettings();
   });
 }
 
 if (micEchoToggle) {
   micEchoToggle.addEventListener('change', () => {
-    socket.emit('mic:control', {
-      volume: micVolSlider ? parseInt(micVolSlider.value, 10) : 120,
-      echoEnabled: micEchoToggle.checked
-    });
+    sendMicControlSettings();
     showToast(micEchoToggle.checked ? '✨ เปิดเอคโค่เสียงก้องคอนเสิร์ต' : '🔇 ปิดเอคโค่ (เสียงแห้งปกติ)');
   });
 }
