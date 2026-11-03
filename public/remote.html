@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
-  <link rel="stylesheet" href="/css/remote.css?v=2.3">
+  <link rel="stylesheet" href="/css/remote.css?v=2.4">
   <script src="/socket.io/socket.io.js"></script>
 </head>
 <body>
@@ -237,6 +237,10 @@
                   <input type="checkbox" id="micEchoToggle" checked>
                   <span>✨ เอคโค่เสียงก้องคอนเสิร์ต (Reverb/Echo)</span>
                 </label>
+              </div>
+              <div class="mic-latency-hint">
+                <span class="hint-icon">⚡</span>
+                <span>เคล็ดลับ: ปิดเอคโค่เพื่อเสียงสดทันใจสูงสุด (หากทีวีต่อลำโพง แนะนำใช้สาย AUX/HDMI แทนบลูทูธ)</span>
               </div>
             </div>
           </div>
@@ -571,6 +575,6 @@
     <div id="toast" class="toast-popup"></div>
   </div>
 
-  <script src="/js/remote.js?v=2.3"></script>
+  <script src="/js/remote.js?v=2.4"></script>
 </body>
 </html>

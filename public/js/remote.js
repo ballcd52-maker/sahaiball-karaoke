@@ -1028,6 +1028,24 @@ if (toggleMicBtn) {
   });
 }
 
+// Helper: Force Opus codec into Ultra-Low Latency mode (10ms packets, CBR, Mono)
+function optimizeSdpForLowLatency(sdp) {
+  if (!sdp) return sdp;
+  return sdp.replace(/a=fmtp:(\d+) ([^\r\n]+)/g, (match, pt, params) => {
+    if (sdp.includes(`a=rtpmap:${pt} opus/48000`)) {
+      let p = params
+        .replace(/minptime=\d+;?/g, '')
+        .replace(/ptime=\d+;?/g, '')
+        .replace(/cbr=\d+;?/g, '')
+        .replace(/stereo=\d+;?/g, '')
+        .replace(/sprop-stereo=\d+;?/g, '')
+        .replace(/maxaveragebitrate=\d+;?/g, '');
+      return `a=fmtp:${pt} ${p};minptime=10;ptime=10;cbr=1;stereo=0;sprop-stereo=0;maxaveragebitrate=96000`;
+    }
+    return match;
+  });
+}
+
 async function startMicStreaming() {
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
     showToast('⚠️ เบราว์เซอร์ของคุณไม่รองรับการเปิดไมค์ WebRTC');
@@ -1038,21 +1056,50 @@ async function startMicStreaming() {
     if (micStatusPill) micStatusPill.textContent = '🟡 กำลังเชื่อมต่อ...';
     if (micBtnLabel) micBtnLabel.textContent = 'กำลังเชื่อมต่อ...';
 
-    // 1. Capture microphone audio with Safari / WebKit compatibility fallback
+    // 1. Capture microphone with Ultra-Low Latency constraints (Bypass mobile AEC & Noise Suppression buffers)
+    const lowLatencyConstraints = {
+      echoCancellation: false,
+      noiseSuppression: false,
+      autoGainControl: false,
+      latency: 0,
+      channelCount: 1,
+      sampleRate: 48000
+    };
+
     try {
       micStream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: { ideal: true },
-          autoGainControl: { ideal: true }
-        },
+        audio: lowLatencyConstraints,
         video: false
       });
-    } catch (conErr) {
-      console.warn('Advanced audio constraints rejected by Safari/iOS, falling back to basic audio', conErr);
-      micStream = await navigator.mediaDevices.getUserMedia({
-        audio: true,
-        video: false
-      });
+    } catch (conErr1) {
+      console.warn('Strict low-latency audio constraints rejected, retrying with basic disabled filters:', conErr1);
+      try {
+        micStream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: false,
+            noiseSuppression: false,
+            autoGainControl: false
+          },
+          video: false
+        });
+      } catch (conErr2) {
+        console.warn('Fallback to basic audio capture:', conErr2);
+        micStream = await navigator.mediaDevices.getUserMedia({
+          audio: true,
+          video: false
+        });
+      }
+    }
+
+    // Force disable any residual DSP filters on the active audio track
+    const activeTrack = micStream.getAudioTracks()[0];
+    if (activeTrack && activeTrack.applyConstraints) {
+      activeTrack.applyConstraints({
+        echoCancellation: false,
+        noiseSuppression: false,
+        autoGainControl: false,
+        latency: 0
+      }).catch(() => {});
     }
 
     // 2. Initialize RTCPeerConnection
@@ -1064,7 +1111,21 @@ async function startMicStreaming() {
     });
 
     micStream.getAudioTracks().forEach(track => {
-      micPeerConnection.addTrack(track, micStream);
+      const sender = micPeerConnection.addTrack(track, micStream);
+      // Request high network priority & maximum fidelity encoding
+      if (sender && sender.getParameters) {
+        try {
+          const params = sender.getParameters();
+          if (params.encodings && params.encodings.length > 0) {
+            params.encodings[0].maxBitrate = 96000;
+            params.encodings[0].priority = 'high';
+            params.encodings[0].networkPriority = 'high';
+            if (sender.setParameters) {
+              sender.setParameters(params).catch(() => {});
+            }
+          }
+        } catch (paramErr) {}
+      }
     });
 
     micPeerConnection.onicecandidate = (e) => {
@@ -1083,14 +1144,20 @@ async function startMicStreaming() {
           micStatusPill.textContent = '🟢 ไมค์สด (ออนไลน์)';
           micStatusPill.classList.add('active');
         }
-        showToast('🎙️ ไมค์เปิดแล้ว! พูดหรือร้องใส่รูก้นมือถือได้เลย');
+        showToast('🎙️ ไมค์เปิดแล้ว! ร้องสดได้ยินทันที');
       } else if (micPeerConnection.connectionState === 'disconnected' || micPeerConnection.connectionState === 'failed') {
         stopMicStreaming();
       }
     };
 
-    // 3. Create Offer (Standard Unified Plan compatible with iOS Safari & Android)
-    const offer = await micPeerConnection.createOffer();
+    // 3. Create Offer with Voice Activity Detection disabled & Opus low latency munging
+    const rawOffer = await micPeerConnection.createOffer({
+      offerToReceiveAudio: false,
+      offerToReceiveVideo: false,
+      voiceActivityDetection: false
+    });
+    const lowLatencySdp = optimizeSdpForLowLatency(rawOffer.sdp);
+    const offer = new RTCSessionDescription({ type: rawOffer.type, sdp: lowLatencySdp });
     await micPeerConnection.setLocalDescription(offer);
 
     socket.emit('webrtc:offer', {

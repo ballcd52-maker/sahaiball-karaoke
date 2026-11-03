@@ -50,14 +50,26 @@ document.addEventListener('touchstart', () => {
   }
 });
 
-// Audio Context for KTV Soundboard & Jingles
+// Audio Context for KTV Soundboard, Jingles & Real-time WebRTC Mic
 let audioCtx = null;
 function getAudioContext() {
   if (!audioCtx) {
-    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    try {
+      audioCtx = new AudioContextClass({
+        latencyHint: 'interactive', // Lowest hardware buffer size
+        sampleRate: 48000
+      });
+    } catch (e1) {
+      try {
+        audioCtx = new AudioContextClass({ latencyHint: 'interactive' });
+      } catch (e2) {
+        audioCtx = new AudioContextClass();
+      }
+    }
   }
   if (audioCtx.state === 'suspended') {
-    audioCtx.resume();
+    audioCtx.resume().catch(() => {});
   }
   return audioCtx;
 }
@@ -1343,18 +1355,18 @@ class VocalFXPipeline {
     this.robotOscGain.connect(this.robotGain.gain);
     this.robotOsc.start();
 
-    // Studio Slapback Reverb & Echo
+    // Studio Ambient Room Reverb / Slapback (Tight 75ms for natural depth without noticeable latency)
     this.echoDelay = context.createDelay();
-    this.echoDelay.delayTime.setValueAtTime(0.16, context.currentTime); // 160ms slapback
+    this.echoDelay.delayTime.setValueAtTime(0.075, context.currentTime); // 75ms tight depth
     this.echoFeedback = context.createGain();
-    this.echoFeedback.gain.setValueAtTime(0.26, context.currentTime); // 26% decay
+    this.echoFeedback.gain.setValueAtTime(0.18, context.currentTime); // 18% decay
     this.echoDelay.connect(this.echoFeedback);
     this.echoFeedback.connect(this.echoDelay);
 
     this.dryGain = context.createGain();
-    this.dryGain.gain.setValueAtTime(0.85, context.currentTime);
+    this.dryGain.gain.setValueAtTime(1.0, context.currentTime); // Full punchy direct vocal
     this.wetGain = context.createGain();
-    this.wetGain.gain.setValueAtTime(0.35, context.currentTime);
+    this.wetGain.gain.setValueAtTime(0.18, context.currentTime); // Subtle natural stage wetness
 
     this.robotGain.connect(this.dryGain);
     this.robotGain.connect(this.echoDelay);
@@ -1407,7 +1419,7 @@ class VocalFXPipeline {
         this.filter.gain.setValueAtTime(5.0, now);
       }
 
-      this.wetGain.gain.setValueAtTime(this.echoActive ? 0.28 : 0.0, now);
+      this.wetGain.gain.setValueAtTime(this.echoActive ? 0.18 : 0.0, now);
     } else if (preset === 'robot') {
       // Clean pitch input, modulate with 55Hz carrier
       this.cleanGain.gain.setValueAtTime(1.0, now);
@@ -1417,7 +1429,7 @@ class VocalFXPipeline {
       // Ring Mod active
       this.robotGain.gain.setValueAtTime(0.0, now);
       this.robotOscGain.gain.setValueAtTime(0.85, now);
-      this.wetGain.gain.setValueAtTime(this.echoActive ? 0.35 : 0.0, now);
+      this.wetGain.gain.setValueAtTime(this.echoActive ? 0.20 : 0.0, now);
     } else if (preset === 'megaphone') {
       // Megaphone Bandpass filter (450Hz - 2.8kHz)
       this.cleanGain.gain.setValueAtTime(1.0, now);
@@ -1425,13 +1437,13 @@ class VocalFXPipeline {
       this.filter.type = 'bandpass';
       this.filter.frequency.setValueAtTime(1250, now);
       this.filter.Q.setValueAtTime(2.2, now);
-      this.wetGain.gain.setValueAtTime(this.echoActive ? 0.12 : 0.0, now);
+      this.wetGain.gain.setValueAtTime(this.echoActive ? 0.08 : 0.0, now);
     } else {
       // Natural Studio Voice
       this.cleanGain.gain.setValueAtTime(1.0, now);
       this.pitchWetGain.gain.setValueAtTime(0.0, now);
       this.filter.type = 'allpass';
-      this.wetGain.gain.setValueAtTime(this.echoActive ? 0.35 : 0.0, now);
+      this.wetGain.gain.setValueAtTime(this.echoActive ? 0.18 : 0.0, now);
     }
   }
 
@@ -1537,6 +1549,23 @@ function escapeHtml(str) {
   })[m]);
 }
 
+function optimizeSdpForLowLatency(sdp) {
+  if (!sdp) return sdp;
+  return sdp.replace(/a=fmtp:(\d+) ([^\r\n]+)/g, (match, pt, params) => {
+    if (sdp.includes(`a=rtpmap:${pt} opus/48000`)) {
+      let p = params
+        .replace(/minptime=\d+;?/g, '')
+        .replace(/ptime=\d+;?/g, '')
+        .replace(/cbr=\d+;?/g, '')
+        .replace(/stereo=\d+;?/g, '')
+        .replace(/sprop-stereo=\d+;?/g, '')
+        .replace(/maxaveragebitrate=\d+;?/g, '');
+      return `a=fmtp:${pt} ${p};minptime=10;ptime=10;cbr=1;stereo=0;sprop-stereo=0;maxaveragebitrate=96000`;
+    }
+    return match;
+  });
+}
+
 socket.on('webrtc:offer', async ({ offer, senderSocketId, nickname }) => {
   console.log(`🎙️ Incoming WebRTC Mic offer from ${nickname} (${senderSocketId})`);
   
@@ -1582,6 +1611,18 @@ socket.on('webrtc:offer', async ({ offer, senderSocketId, nickname }) => {
       const stream = e.streams[0];
       micEntry.stream = stream;
 
+      // Ultra-Low Latency Playout: Clamp WebRTC receiver jitter buffer to 0
+      if (e.receiver) {
+        if ('playoutDelayHint' in e.receiver) e.receiver.playoutDelayHint = 0;
+        if ('jitterBufferTarget' in e.receiver) e.receiver.jitterBufferTarget = 0;
+      }
+      pc.getReceivers().forEach(receiver => {
+        if (receiver.track && receiver.track.kind === 'audio') {
+          if ('playoutDelayHint' in receiver) receiver.playoutDelayHint = 0;
+          if ('jitterBufferTarget' in receiver) receiver.jitterBufferTarget = 0;
+        }
+      });
+
       // WebRTC audio pipeline activation for WebKit (Safari) & Chromium:
       try {
         const audioWakeEl = document.createElement('audio');
@@ -1609,7 +1650,11 @@ socket.on('webrtc:offer', async ({ offer, senderSocketId, nickname }) => {
     };
 
     await pc.setRemoteDescription(new RTCSessionDescription(offer));
-    const answer = await pc.createAnswer();
+    const rawAnswer = await pc.createAnswer({
+      voiceActivityDetection: false
+    });
+    const lowLatencySdp = optimizeSdpForLowLatency(rawAnswer.sdp);
+    const answer = new RTCSessionDescription({ type: rawAnswer.type, sdp: lowLatencySdp });
     await pc.setLocalDescription(answer);
 
     socket.emit('webrtc:answer', {
