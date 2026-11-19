@@ -38,6 +38,9 @@ function getBaseUrl(req) {
   }
   if (req) {
     const host = req.get('host');
+    if (host && (host.startsWith('localhost') || host.startsWith('127.0.0.1'))) {
+      return `http://${LOCAL_IP}:${PORT}`;
+    }
     const proto = req.headers['x-forwarded-proto'] || req.protocol;
     return `${proto}://${host}`;
   }
@@ -66,13 +69,75 @@ app.get('/display', (req, res) => {
 // API: Direct QR Code Generator Image
 app.get('/api/qr', async (req, res) => {
   try {
-    const targetUrl = req.query.url || `${getBaseUrl(req)}/remote`;
+    const targetUrl = req.query.url || (req.query.room ? `${getBaseUrl(req)}/remote?room=${req.query.room}` : `${getBaseUrl(req)}/remote`);
     const qrBuffer = await qrcode.toBuffer(targetUrl, { margin: 1, width: 260 });
     res.type('png').send(qrBuffer);
   } catch (err) {
     res.status(500).send('QR Error');
   }
 });
+
+// Helper: Extract YouTube Video ID from string or URL
+function extractVideoId(input) {
+  if (!input) return null;
+  const str = input.trim();
+  if (/^[a-zA-Z0-9_-]{11}$/.test(str)) {
+    return str;
+  }
+  const match = str.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?.*v=|embed\/|shorts\/|v\/))([a-zA-Z0-9_-]{11})/i);
+  return match ? match[1] : null;
+}
+
+// Fallback direct YouTube search parser in case yt-search fails or is throttled
+async function searchYouTubeFallback(query) {
+  try {
+    const res = await fetch(`https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        'Accept-Language': 'th,en-US;q=0.9,en;q=0.8'
+      }
+    });
+    if (!res.ok) return [];
+    const html = await res.text();
+    const match = html.match(/var ytInitialData = ({.*?});<\/script>/) || html.match(/ytInitialData\s*=\s*({.+?});/);
+    if (!match) return [];
+    const data = JSON.parse(match[1]);
+    const contents = data?.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents;
+    const items = [];
+    if (contents) {
+      for (const section of contents) {
+        const vids = section?.itemSectionRenderer?.contents;
+        if (vids) {
+          for (const item of vids) {
+            const vr = item?.videoRenderer;
+            if (vr && vr.videoId) {
+              const dur = vr.lengthText?.simpleText || '';
+              let secs = 0;
+              if (dur) {
+                const parts = dur.split(':').map(Number);
+                if (parts.length === 2) secs = parts[0] * 60 + parts[1];
+                else if (parts.length === 3) secs = parts[0] * 3600 + parts[1] * 60 + parts[2];
+              }
+              items.push({
+                videoId: vr.videoId,
+                title: vr.title?.runs?.map(r => r.text).join('') || vr.title?.simpleText || '',
+                thumbnail: vr.thumbnail?.thumbnails?.[vr.thumbnail.thumbnails.length - 1]?.url || `https://i.ytimg.com/vi/${vr.videoId}/hqdefault.jpg`,
+                duration: dur || '0:00',
+                seconds: secs,
+                author: vr.ownerText?.runs?.[0]?.text || '',
+                views: vr.viewCountText?.simpleText || ''
+              });
+            }
+          }
+        }
+      }
+    }
+    return items.slice(0, 20);
+  } catch (err) {
+    console.error('Fallback search error:', err.message);
+    return [];
+  }
+}
 
 // API: YouTube Search
 app.get('/api/search', async (req, res) => {
@@ -81,21 +146,59 @@ app.get('/api/search', async (req, res) => {
     const isKaraokeOnly = req.query.karaoke === 'true';
     if (!query) return res.status(400).json({ error: 'Query is required' });
 
+    // 1. Check if user provided direct YouTube link or video ID
+    const directVideoId = extractVideoId(query);
+    if (directVideoId) {
+      try {
+        const v = await yts({ videoId: directVideoId });
+        if (v) {
+          return res.json({
+            results: [{
+              videoId: v.videoId,
+              title: v.title,
+              thumbnail: v.thumbnail || v.image,
+              duration: v.timestamp || `${Math.floor(v.seconds / 60)}:${v.seconds % 60}`,
+              seconds: v.seconds,
+              author: v.author ? v.author.name : '',
+              views: v.views
+            }],
+            searchTerm: query
+          });
+        }
+      } catch (directErr) {
+        console.warn('Direct video lookup failed, proceeding with text search:', directErr.message);
+      }
+    }
+
+    // 2. Prepare search term
     let searchTerm = query.trim();
     if (isKaraokeOnly && !searchTerm.toLowerCase().includes('karaoke') && !searchTerm.includes('คาราโอเกะ')) {
       searchTerm += ' คาราโอเกะ';
     }
 
-    const results = await yts(searchTerm);
-    const videos = (results.videos || []).slice(0, 20).map(v => ({
-      videoId: v.videoId,
-      title: v.title,
-      thumbnail: v.thumbnail || v.image,
-      duration: v.timestamp || `${Math.floor(v.seconds / 60)}:${v.seconds % 60}`,
-      seconds: v.seconds,
-      author: v.author ? v.author.name : '',
-      views: v.views
-    }));
+    // 3. Primary search via yt-search
+    let videos = [];
+    try {
+      const results = await yts(searchTerm);
+      if (results && results.videos && results.videos.length > 0) {
+        videos = results.videos.slice(0, 20).map(v => ({
+          videoId: v.videoId,
+          title: v.title,
+          thumbnail: v.thumbnail || v.image,
+          duration: v.timestamp || `${Math.floor(v.seconds / 60)}:${v.seconds % 60}`,
+          seconds: v.seconds,
+          author: v.author ? v.author.name : '',
+          views: v.views
+        }));
+      }
+    } catch (primaryErr) {
+      console.warn('Primary yt-search failed, using direct YouTube fallback:', primaryErr.message);
+    }
+
+    // 4. Secondary fallback search if primary returned no videos
+    if (videos.length === 0) {
+      videos = await searchYouTubeFallback(searchTerm);
+    }
 
     res.json({ results: videos, searchTerm });
   } catch (err) {
@@ -250,8 +353,11 @@ function playNextSongInRoom(room) {
   } else {
     room.currentSong = null;
     room.playerState.isPlaying = false;
+    room.playerState.currentTime = 0;
+    room.playerState.duration = 0;
     broadcastRoomUpdate(room.code, 'tv:command', { action: 'idle' });
     broadcastRoomUpdate(room.code, 'queue:update', { songQueue: room.songQueue, currentSong: null });
+    broadcastRoomUpdate(room.code, 'player:state', room.playerState);
   }
 }
 
@@ -534,6 +640,7 @@ io.on('connection', (socket) => {
 
   // 9. PLAYBACK CONTROLS (Host or Guests if allowed)
   socket.on('player:control', (data) => {
+    if (!data) return;
     const room = getRoom(socket.data.roomCode);
     if (!room) return;
 
@@ -586,6 +693,7 @@ io.on('connection', (socket) => {
 
   // 11. SFX & JINGLES (Anyone in room can trigger)
   socket.on('sfx:play', (data) => {
+    if (!data) return;
     const room = getRoom(socket.data.roomCode);
     if (!room) return;
     broadcastRoomUpdate(room.code, 'tv:sfx', {
@@ -596,6 +704,7 @@ io.on('connection', (socket) => {
 
   // 12. DANMAKU / LIVE REACTION
   socket.on('danmaku:send', (data) => {
+    if (!data) return;
     const room = getRoom(socket.data.roomCode);
     if (!room) return;
     broadcastRoomUpdate(room.code, 'tv:danmaku', {
@@ -610,9 +719,13 @@ io.on('connection', (socket) => {
   socket.on('tv:state_update', (state) => {
     const room = getRoom(socket.data.roomCode);
     if (!room) return;
-    room.playerState.isPlaying = state.isPlaying;
-    room.playerState.currentTime = state.currentTime;
-    room.playerState.duration = state.duration;
+    if (!room.currentSong) {
+      room.playerState.isPlaying = false;
+      return;
+    }
+    room.playerState.isPlaying = Boolean(state.isPlaying);
+    room.playerState.currentTime = state.currentTime || 0;
+    room.playerState.duration = state.duration || 0;
     broadcastRoomUpdate(room.code, 'player:state', room.playerState);
   });
 
@@ -665,6 +778,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('mic:control', (data) => {
+    if (!data) return;
     const room = getRoom(socket.data.roomCode);
     if (!room || !room.displaySocketId) return;
     io.to(room.displaySocketId).emit('mic:control', {
@@ -681,7 +795,10 @@ io.on('connection', (socket) => {
     if (socket.data.roomCode) {
       const room = getRoom(socket.data.roomCode);
       if (room) {
-        if (room.displaySocketId) {
+        if (room.displaySocketId === socket.id) {
+          room.displaySocketId = null;
+          console.log(`[DISPLAY DISCONNECTED] TV Screen left room_${room.code}`);
+        } else if (room.displaySocketId) {
           io.to(room.displaySocketId).emit('mic:stop', { senderSocketId: socket.id });
         }
         room.users.delete(socket.id);

@@ -613,48 +613,242 @@ clearQueueBtn.addEventListener('click', () => {
   }
 });
 
-// Search Functions
+// =============================================================================
+// SEARCH, CATEGORIES & FAVORITES
+// =============================================================================
+
+// Favorites Storage System
+function getFavorites() {
+  try {
+    return JSON.parse(localStorage.getItem('ktv_favorites') || '[]');
+  } catch (e) {
+    return [];
+  }
+}
+
+function saveFavorites(favs) {
+  localStorage.setItem('ktv_favorites', JSON.stringify(favs));
+  updateFavCount();
+}
+
+function updateFavCount() {
+  const badge = document.getElementById('favCountBadge');
+  if (badge) {
+    badge.textContent = getFavorites().length;
+  }
+}
+updateFavCount();
+
+window.toggleFavorite = function(video) {
+  let favs = getFavorites();
+  const existsIndex = favs.findIndex(f => f.videoId === video.videoId);
+  if (existsIndex >= 0) {
+    favs.splice(existsIndex, 1);
+    saveFavorites(favs);
+    showToast(`💔 นำออกจากเพลงโปรดแล้ว`);
+  } else {
+    favs.unshift(video);
+    saveFavorites(favs);
+    showToast(`❤️ บันทึก "${video.title}" ในเพลงโปรดแล้ว!`);
+  }
+  updateFavCount();
+  if (currentGenre === 'fav') {
+    renderFavoritesList();
+  } else {
+    const btn = document.querySelector(`.fav-btn[data-id="${video.videoId}"]`);
+    if (btn) btn.classList.toggle('active', existsIndex < 0);
+  }
+};
+
+function renderFavoritesList() {
+  const favs = getFavorites();
+  resultsList.innerHTML = '';
+  searchLoading.style.display = 'none';
+
+  if (favs.length === 0) {
+    searchEmpty.style.display = 'block';
+    const h3 = searchEmpty.querySelector('h3');
+    const p = searchEmpty.querySelector('p');
+    if (h3) h3.textContent = 'ยังไม่มีเพลงโปรด';
+    if (p) p.textContent = 'กดไอคอน ❤️ บนเพลงที่ชอบ เพื่อเก็บไว้ร้องคราวหน้าได้สะดวกรวดเร็ว';
+    return;
+  }
+
+  searchEmpty.style.display = 'none';
+  renderSearchResults(favs, true);
+}
+
+// Genre Categories Data
+const genreChipsData = {
+  all: [
+    { label: '🔥 คาราโอเกะฮิต', query: 'คาราโอเกะ ฮิต' },
+    { label: 'COCKTAIL', query: 'COCKTAIL คาราโอเกะ' },
+    { label: 'Tilly Birds', query: 'Tilly Birds คาราโอเกะ' },
+    { label: 'Bodyslam', query: 'Bodyslam คาราโอเกะ' },
+    { label: 'Three Man Down', query: 'Three Man Down คาราโอเกะ' },
+    { label: 'ลูกทุ่งฮิต', query: 'ลูกทุ่ง คาราโอเกะ' }
+  ],
+  rock: [
+    { label: '🎸 Bodyslam', query: 'Bodyslam คาราโอเกะ' },
+    { label: '🎸 Silly Fools', query: 'Silly Fools คาราโอเกะ' },
+    { label: '🎸 Paradox', query: 'Paradox คาราโอเกะ' },
+    { label: '🎸 LABANOON', query: 'LABANOON คาราโอเกะ' },
+    { label: '🎸 Retrospect', query: 'Retrospect คาราโอเกะ' }
+  ],
+  sad: [
+    { label: '💔 เพลงอกหักโดนๆ', query: 'เพลงอกหัก คาราโอเกะ' },
+    { label: '💔 Slapkiss', query: 'Slapkiss คาราโอเกะ' },
+    { label: '💔 BOWKYLION', query: 'BOWKYLION คาราโอเกะ' },
+    { label: '💔 Three Man Down', query: 'Three Man Down คาราโอเกะ' },
+    { label: '💔 Tilly Birds', query: 'Tilly Birds คาราโอเกะ' }
+  ],
+  '90s': [
+    { label: '📼 ฮิตยุค 90s', query: 'เพลงยุค 90 คาราโอเกะ' },
+    { label: '📼 เสก โลโซ', query: 'เสก โลโซ คาราโอเกะ' },
+    { label: '📼 โมเดิร์นด็อก', query: 'Moderndog คาราโอเกะ' },
+    { label: '📼 พลพล', query: 'พลพล คาราโอเกะ' },
+    { label: '📼 อัสนี วสันต์', query: 'อัสนี วสันต์ คาราโอเกะ' }
+  ],
+  country: [
+    { label: '🌾 ลูกทุ่งฮิตติดลม', query: 'ลูกทุ่งฮิต คาราโอเกะ' },
+    { label: '🌾 โจอี้ ภูวศิษฐ์', query: 'โจอี้ ภูวศิษฐ์ คาราโอเกะ' },
+    { label: '🌾 ไผ่ พงศธร', query: 'ไผ่ พงศธร คาราโอเกะ' },
+    { label: '🌾 มนต์แคน แก่นคูน', query: 'มนต์แคน แก่นคูน คาราโอเกะ' },
+    { label: '🌾 ลำไย ไหทองคำ', query: 'ลำไย ไหทองคำ คาราโอเกะ' }
+  ],
+  inter: [
+    { label: '🌍 Billboard Hits', query: 'Top Billboard Hits Karaoke' },
+    { label: '🌍 Ed Sheeran', query: 'Ed Sheeran Karaoke' },
+    { label: '🌍 Bruno Mars', query: 'Bruno Mars Karaoke' },
+    { label: '🌍 Maroon 5', query: 'Maroon 5 Karaoke' },
+    { label: '🌍 Taylor Swift', query: 'Taylor Swift Karaoke' }
+  ],
+  dance: [
+    { label: '💃 แดนซ์สายตื๊ด', query: 'เพลงแดนซ์ คาราโอเกะ' },
+    { label: '💃 4EVE', query: '4EVE คาราโอเกะ' },
+    { label: '💃 PROXIE', query: 'PROXIE คาราโอเกะ' },
+    { label: '💃 สามช่าโจ๊ะๆ', query: 'สามช่า คาราโอเกะ' }
+  ]
+};
+
+const mvChips = [
+  { label: '🔥 เพลงฮิตติดชาร์ต', query: 'เพลงไทยฮิตติดชาร์ต' },
+  { label: '🎬 Official MV', query: 'Official MV เพลงฮิต' },
+  { label: 'COCKTAIL MV', query: 'COCKTAIL Official MV' },
+  { label: 'Tilly Birds MV', query: 'Tilly Birds Official MV' },
+  { label: 'Bodyslam MV', query: 'Bodyslam Official MV' },
+  { label: 'เพลงสากลฮิต', query: 'Top Billboard Hits' }
+];
+
+let currentGenre = 'all';
+
+function renderGenreChips(genre) {
+  if (!quickChipsContainer) return;
+  if (genre === 'all') {
+    renderQuickChips(searchMode);
+    return;
+  }
+  const chips = genreChipsData[genre] || [];
+  quickChipsContainer.innerHTML = chips.map(item => `
+    <button class="chip" data-query="${escapeHtml(item.query)}">${escapeHtml(item.label)}</button>
+  `).join('');
+}
+
+function renderQuickChips(mode) {
+  if (!quickChipsContainer) return;
+  const list = mode === 'mv' ? mvChips : (genreChipsData.all || []);
+  quickChipsContainer.innerHTML = list.map(item => `
+    <button class="chip" data-query="${escapeHtml(item.query)}">${escapeHtml(item.label)}</button>
+  `).join('');
+}
+
+const genreCategoryBar = document.getElementById('genreCategoryBar');
+if (genreCategoryBar) {
+  genreCategoryBar.querySelectorAll('.genre-pill').forEach(pill => {
+    pill.addEventListener('click', () => {
+      genreCategoryBar.querySelectorAll('.genre-pill').forEach(p => p.classList.remove('active'));
+      pill.classList.add('active');
+      currentGenre = pill.dataset.genre;
+
+      if (currentGenre === 'fav') {
+        renderFavoritesList();
+      } else {
+        renderGenreChips(currentGenre);
+      }
+    });
+  });
+}
+
+// Search Input and Listeners
 searchInput.addEventListener('input', () => {
   clearTimeout(searchDebounceTimer);
   const q = searchInput.value.trim();
   if (!q) {
     resultsList.innerHTML = '';
-    searchEmpty.style.display = 'block';
+    if (currentGenre === 'fav') {
+      renderFavoritesList();
+    } else {
+      searchEmpty.style.display = 'block';
+    }
     return;
   }
   searchDebounceTimer = setTimeout(() => executeSearch(q), 400);
 });
 
+searchInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    clearTimeout(searchDebounceTimer);
+    const q = searchInput.value.trim();
+    if (q) {
+      executeSearch(q);
+      searchInput.blur();
+    }
+  }
+});
+
 searchClearBtn.addEventListener('click', () => {
   searchInput.value = '';
   resultsList.innerHTML = '';
-  searchEmpty.style.display = 'block';
+  if (currentGenre === 'fav') {
+    renderFavoritesList();
+  } else {
+    searchEmpty.style.display = 'block';
+  }
+  searchInput.focus();
 });
 
-modeKaraokeBtn.addEventListener('click', () => {
-  searchMode = 'karaoke';
-  modeKaraokeBtn.classList.add('active');
-  modeMvBtn.classList.remove('active');
+function setSearchMode(mode) {
+  searchMode = mode;
+  if (mode === 'karaoke') {
+    if (modeKaraokeBtn) modeKaraokeBtn.classList.add('active');
+    if (modeMvBtn) modeMvBtn.classList.remove('active');
+    searchInput.placeholder = 'พิมพ์ชื่อเพลง หรือ ศิลปิน (ตัดเสียงร้อง)...';
+    if (currentGenre === 'all') renderQuickChips('karaoke');
+  } else {
+    if (modeMvBtn) modeMvBtn.classList.add('active');
+    if (modeKaraokeBtn) modeKaraokeBtn.classList.remove('active');
+    searchInput.placeholder = 'พิมพ์ชื่อเพลง MV ต้นฉบับ (มีเสียงร้อง)...';
+    if (currentGenre === 'all') renderQuickChips('mv');
+  }
   const q = searchInput.value.trim();
   if (q) executeSearch(q);
-});
+}
 
-modeMvBtn.addEventListener('click', () => {
-  searchMode = 'mv';
-  modeMvBtn.classList.add('active');
-  modeKaraokeBtn.classList.remove('active');
-  const q = searchInput.value.trim();
-  if (q) executeSearch(q);
-});
+if (modeKaraokeBtn) modeKaraokeBtn.addEventListener('click', () => setSearchMode('karaoke'));
+if (modeMvBtn) modeMvBtn.addEventListener('click', () => setSearchMode('mv'));
 
 quickChipsContainer.addEventListener('click', (e) => {
   const chip = e.target.closest('.chip');
   if (chip) {
     const q = chip.dataset.query;
-    searchInput.value = q;
-    executeSearch(q);
+    if (q) {
+      searchInput.value = q;
+      executeSearch(q);
+    }
   }
 });
+
+renderQuickChips('karaoke');
 
 async function executeSearch(query) {
   if (!query) return;
@@ -679,24 +873,47 @@ async function executeSearch(query) {
   }
 }
 
-function renderSearchResults(videos) {
+function renderSearchResults(videos, isFavView = false) {
   resultsList.innerHTML = '';
+  const isMv = searchMode === 'mv';
+  const favIds = new Set(getFavorites().map(f => f.videoId));
+
   videos.forEach(v => {
+    const isFav = favIds.has(v.videoId);
     const card = document.createElement('div');
     card.className = 'song-card';
-    const safeVideo = JSON.stringify(v).replace(/'/g, "&apos;");
+
+    const tagBadge = isFavView
+      ? '<span style="display:inline-block; font-size:0.75rem; background:rgba(244,63,94,0.2); color:#fda4af; border:1px solid rgba(244,63,94,0.3); padding:2px 8px; border-radius:12px; margin-bottom:4px; font-weight:600;">❤️ เพลงโปรด</span>'
+      : (isMv 
+        ? '<span style="display:inline-block; font-size:0.75rem; background:rgba(37,99,235,0.25); color:#60a5fa; border:1px solid rgba(59,130,246,0.3); padding:2px 8px; border-radius:12px; margin-bottom:4px; font-weight:600;">🎬 MV มีเสียงร้อง</span>'
+        : '<span style="display:inline-block; font-size:0.75rem; background:rgba(168,85,247,0.25); color:#c084fc; border:1px solid rgba(168,85,247,0.3); padding:2px 8px; border-radius:12px; margin-bottom:4px; font-weight:600;">🎤 คาราโอเกะ</span>');
 
     card.innerHTML = `
       <img src="${v.thumbnail}" alt="Thumb" loading="lazy">
       <div class="song-card-info">
+        ${tagBadge}
         <div class="song-card-title">${escapeHtml(v.title)}</div>
         <div class="song-card-sub">${escapeHtml(v.author)} • ${v.duration}</div>
       </div>
       <div class="song-card-actions">
-        <button class="priority-btn" onclick='addSongToQueue(${safeVideo}, true)' title="แซงคิวเป็นเพลงถัดไป">⚡ ร้องเลย</button>
-        <button class="add-btn" onclick='addSongToQueue(${safeVideo}, false)'>+ ต่อคิว</button>
+        <div style="display:flex; gap:6px; justify-content: flex-end;">
+          <button class="fav-btn ${isFav ? 'active' : ''}" data-id="${v.videoId}" title="บันทึกเพลงโปรด">❤️</button>
+          <button class="priority-btn" title="แซงคิวเป็นเพลงถัดไป">⚡ ร้องเลย</button>
+        </div>
+        <button class="add-btn">+ ต่อคิว</button>
       </div>
     `;
+
+    const priorityBtn = card.querySelector('.priority-btn');
+    priorityBtn.addEventListener('click', () => addSongToQueue(v, true));
+
+    const addBtn = card.querySelector('.add-btn');
+    addBtn.addEventListener('click', () => addSongToQueue(v, false));
+
+    const favBtn = card.querySelector('.fav-btn');
+    favBtn.addEventListener('click', () => toggleFavorite(v));
+
     resultsList.appendChild(card);
   });
 }

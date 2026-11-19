@@ -167,10 +167,19 @@
   </div>
 
   <script>
-    const origin = window.location.origin;
-    const remoteUrl = `${origin}/remote`;
-    document.getElementById('qrImg').src = `/api/qr?url=${encodeURIComponent(remoteUrl)}`;
-    document.getElementById('qrUrlText').textContent = remoteUrl;
+    fetch('/api/info')
+      .then(r => r.json())
+      .then(info => {
+        const targetUrl = info.remoteUrl || `${window.location.origin}/remote`;
+        document.getElementById('qrImg').src = `/api/qr?url=${encodeURIComponent(targetUrl)}`;
+        document.getElementById('qrUrlText').textContent = targetUrl;
+      })
+      .catch(() => {
+        const origin = window.location.origin;
+        const remoteUrl = `${origin}/remote`;
+        document.getElementById('qrImg').src = `/api/qr`;
+        document.getElementById('qrUrlText').textContent = remoteUrl;
+      });
   </script>
 </body>
 </html>

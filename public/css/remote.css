@@ -1402,62 +1402,6 @@ body, html {
   background: rgba(168, 85, 247, 0.45);
 }
 
-/* Lucky Draw Button */
-.lucky-draw-wrapper {
-  margin-bottom: 12px;
-}
-
-.lucky-draw-btn {
-  width: 100%;
-  background: linear-gradient(135deg, #1e1138 0%, #0d1e38 50%, #1e1138 100%);
-  border: 1px solid rgba(0, 240, 255, 0.4);
-  border-radius: 14px;
-  padding: 12px 16px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 4px 20px rgba(0, 240, 255, 0.15);
-  text-align: left;
-}
-
-.lucky-draw-btn:active {
-  transform: scale(0.97);
-  box-shadow: 0 0 25px rgba(0, 240, 255, 0.4);
-}
-
-.dice-icon {
-  font-size: 1.8rem;
-  filter: drop-shadow(0 0 10px #00f0ff);
-  animation: diceWiggle 3s infinite ease-in-out;
-}
-
-@keyframes diceWiggle {
-  0%, 100% { transform: rotate(0deg); }
-  25% { transform: rotate(-10deg) scale(1.08); }
-  75% { transform: rotate(10deg) scale(1.08); }
-}
-
-.lucky-label-box {
-  display: flex;
-  flex-direction: column;
-}
-
-.lucky-title {
-  font-size: 0.95rem;
-  font-weight: 700;
-  color: #fff;
-  background: linear-gradient(90deg, #ffffff, #00f0ff, #f43f5e);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
-
-.lucky-sub {
-  font-size: 0.76rem;
-  color: #94a3b8;
-}
-
 /* Genre Category Bar */
 .genre-category-bar {
   display: flex;

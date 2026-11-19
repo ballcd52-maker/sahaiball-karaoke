@@ -118,6 +118,7 @@ const scoreSinger = document.getElementById('scoreSinger');
 const scoreComment = document.getElementById('scoreComment');
 const scoreCountdownFill = document.getElementById('scoreCountdownFill');
 const scoreTimerNum = document.getElementById('scoreTimerNum');
+const scoreCountdownText = document.getElementById('scoreCountdownText');
 
 // Multi-Room HUD Elements
 const hudRoomCode = document.getElementById('hudRoomCode');
@@ -145,12 +146,26 @@ function updateRoomDisplay(code) {
   if (cornerRoomCode) cornerRoomCode.textContent = code;
 
   const currentOrigin = window.location.origin;
-  const currentRemoteUrl = `${currentOrigin}/remote?room=${code}`;
-  if (idleQrImage) idleQrImage.src = `/api/qr?url=${encodeURIComponent(currentRemoteUrl)}`;
-  if (cornerQrImg) cornerQrImg.src = `/api/qr?url=${encodeURIComponent(currentRemoteUrl)}`;
+  let currentRemoteUrl = `${currentOrigin}/remote?room=${code}`;
+  if (idleQrImage) idleQrImage.src = `/api/qr?room=${code}`;
+  if (cornerQrImg) cornerQrImg.src = `/api/qr?room=${code}`;
   if (idleQrUrl) idleQrUrl.textContent = currentRemoteUrl;
   const hudRemoteSwitchBtn = document.getElementById('hudRemoteSwitchBtn');
   if (hudRemoteSwitchBtn) hudRemoteSwitchBtn.href = currentRemoteUrl;
+
+  // Dynamically resolve accurate LAN IP or Cloud URL from /api/info
+  fetch(`/api/info?room=${code}`)
+    .then(r => r.json())
+    .then(info => {
+      if (info && info.remoteUrl) {
+        currentRemoteUrl = info.remoteUrl;
+        if (idleQrUrl) idleQrUrl.textContent = currentRemoteUrl;
+        if (idleQrImage) idleQrImage.src = `/api/qr?url=${encodeURIComponent(currentRemoteUrl)}`;
+        if (cornerQrImg) cornerQrImg.src = `/api/qr?url=${encodeURIComponent(currentRemoteUrl)}`;
+        if (hudRemoteSwitchBtn) hudRemoteSwitchBtn.href = currentRemoteUrl;
+      }
+    })
+    .catch(() => {});
 }
 
 // Click to change room code or randomize new room
@@ -318,14 +333,24 @@ let autoplayCheckTimer = null;
 
 function onPlayerStateChange(event) {
   if (event.data === YT.PlayerState.ENDED) {
-    console.log('Song ended, showing performance score...');
+    console.log('Song ended, pausing player and showing performance score...');
     clearTimeout(autoplayCheckTimer);
     hideTvPlayOverlay();
+    if (player && player.pauseVideo) player.pauseVideo();
     showPerformanceScore();
   } else if (event.data === YT.PlayerState.PLAYING) {
     clearTimeout(autoplayCheckTimer);
     hideTvPlayOverlay();
     hideTvErrorNotice();
+
+    // Prevent rogue playback if we are on the idle screen or have no active song
+    if (!currentVideoId || idleScreen.classList.contains('active')) {
+      console.warn('Playback attempted while in idle mode. Forcing pause/stop.');
+      if (player && player.pauseVideo) player.pauseVideo();
+      if (player && player.stopVideo) player.stopVideo();
+      return;
+    }
+
     startProgressTracker();
     showTopOverlay(10000);
 
@@ -357,9 +382,15 @@ function onPlayerStateChange(event) {
     hideTvErrorNotice();
     if (captionsDisabled) disableCaptions();
   } else if (event.data === YT.PlayerState.CUED) {
-    console.log('Video cued, attempting auto-play...');
-    if (captionsDisabled) disableCaptions();
-    if (player && player.playVideo) player.playVideo();
+    // Only attempt auto-play if there is an active video waiting to be played and NOT on idle screen
+    if (currentVideoId && !idleScreen.classList.contains('active')) {
+      console.log('Video cued, attempting auto-play for video:', currentVideoId);
+      if (captionsDisabled) disableCaptions();
+      if (player && player.playVideo) player.playVideo();
+    } else {
+      console.log('Video cued while in idle mode, keeping stopped.');
+      if (player && player.pauseVideo) player.pauseVideo();
+    }
   }
 }
 
@@ -612,10 +643,12 @@ function loadVideo(videoId) {
 function showIdleScreen() {
   clearTimeout(autoplayCheckTimer);
   currentVideoId = null;
+  currentActiveSong = null;
   hasTriggeredNextAlert = false;
   hideNextSingerAlert();
   hideTvPlayOverlay();
   hideTvErrorNotice();
+  hideScoreScreen();
   idleScreen.classList.add('active');
   startIdleCanvas();
   cornerQr.style.display = 'none';
@@ -627,8 +660,9 @@ function showIdleScreen() {
   timeCurrent.textContent = '00:00';
   timeDuration.textContent = '00:00';
 
-  if (player && player.stopVideo) {
-    player.stopVideo();
+  if (player) {
+    if (player.pauseVideo) player.pauseVideo();
+    if (player.stopVideo) player.stopVideo();
   }
 }
 
@@ -639,12 +673,7 @@ function updateQueueDisplay(songQueue, currentSong) {
     requesterBadge.innerHTML = `<span>👤 ขอโดย: ${currentSong.requester || 'มือถือ'}</span>`;
   } else {
     nowPlayingTitle.textContent = 'กำลังรอเพลง...';
-  }
-  if (currentSong) {
-    nowPlayingTitle.textContent = currentSong.title;
-    requesterBadge.innerHTML = `<span>👤 ขอโดย: ${currentSong.requester || 'มือถือ'}</span>`;
-  } else {
-    nowPlayingTitle.textContent = 'กำลังรอเพลง...';
+    requesterBadge.innerHTML = '';
   }
 
   if (songQueue && songQueue.length > 0) {
@@ -679,6 +708,9 @@ function updateKeyBadge(keyShift) {
 // Virtual Score System
 function showPerformanceScore() {
   stopProgressTracker();
+  if (player && player.pauseVideo) {
+    player.pauseVideo();
+  }
 
   // Generate realistic fun score
   const score = Math.floor(Math.random() * 11) + 89; // 89 to 99
@@ -722,8 +754,21 @@ function showPerformanceScore() {
 
   // 6-second countdown bar
   let countdownSec = 6;
-  scoreTimerNum.textContent = countdownSec;
   scoreCountdownFill.style.width = '100%';
+
+  function updateScoreCountdownLabel() {
+    const hasNext = currentQueue && currentQueue.length > 0;
+    const msg = hasNext
+      ? `เพลงถัดไป: <strong>${escapeHtml(currentQueue[0].title)}</strong> ใน <span id="scoreTimerNum">${countdownSec}</span> วินาที...`
+      : `จบการแสดง กำลังกลับสู่หน้าหลักใน <span id="scoreTimerNum">${countdownSec}</span> วินาที...`;
+    if (scoreCountdownText) {
+      scoreCountdownText.innerHTML = msg;
+    } else if (scoreTimerNum) {
+      scoreTimerNum.textContent = countdownSec;
+    }
+  }
+
+  updateScoreCountdownLabel();
 
   clearInterval(scoreInterval);
   clearTimeout(scoreTimeout);
@@ -731,7 +776,7 @@ function showPerformanceScore() {
   scoreInterval = setInterval(() => {
     countdownSec--;
     if (countdownSec >= 0) {
-      scoreTimerNum.textContent = countdownSec;
+      updateScoreCountdownLabel();
       scoreCountdownFill.style.width = `${(countdownSec / 6) * 100}%`;
     }
   }, 1000);
@@ -1124,12 +1169,14 @@ initIdleCanvas();
 document.addEventListener('keydown', (e) => {
   const code = e.keyCode || e.which;
   if (code === 13 || code === 23 || code === 32 || code === 179 || code === 85 || code === 66) {
-    if (player) {
-      if (player.isMuted && player.isMuted()) {
-        if (player.unMute) player.unMute();
-        if (player.setVolume) player.setVolume(100);
+    if (currentVideoId && !idleScreen.classList.contains('active')) {
+      if (player) {
+        if (player.isMuted && player.isMuted()) {
+          if (player.unMute) player.unMute();
+          if (player.setVolume) player.setVolume(100);
+        }
+        if (player.playVideo) player.playVideo();
       }
-      if (player.playVideo) player.playVideo();
     }
     const ctx = getAudioContext();
     if (ctx && ctx.state === 'suspended') ctx.resume();
